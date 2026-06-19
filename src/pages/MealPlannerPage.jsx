@@ -44,50 +44,56 @@ export default function MealPlannerPage() {
   async function loadPlannerData() {
     try {
       setLoading(true);
-      const context = await getHealthCoachContext(supabase, user.id);
-      setCoachContext(context);
-
       const mondayStr = getMondayOfCurrentWeek();
       
-      // Fetch plan from Supabase
-      const { data: plans, error: planError } = await supabase
-        .from('meal_plans')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('week_start', mondayStr)
-        .order('created_at', { ascending: false });
+      // Parallelize context and meal plans fetch
+      const [context, plansRes] = await Promise.all([
+        getHealthCoachContext(supabase, user.id),
+        supabase
+          .from('meal_plans')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('week_start', mondayStr)
+          .order('created_at', { ascending: false })
+      ]);
 
-      if (planError) throw planError;
+      setCoachContext(context);
+      if (plansRes.error) throw plansRes.error;
 
+      const plans = plansRes.data;
       if (plans && plans.length > 0) {
         const activePlan = plans[0];
         setMealPlan(activePlan);
 
-        // Fetch days
-        const { data: days, error: daysError } = await supabase
-          .from('meal_plan_days')
-          .select('*')
-          .eq('meal_plan_id', activePlan.id)
-          .order('created_at', { ascending: true }); // keep insertion order
+        // Parallelize fetching of days and shopping lists
+        const [daysRes, listsRes] = await Promise.all([
+          supabase
+            .from('meal_plan_days')
+            .select('*')
+            .eq('meal_plan_id', activePlan.id)
+            .order('created_at', { ascending: true }),
+          supabase
+            .from('shopping_lists')
+            .select('id')
+            .eq('meal_plan_id', activePlan.id)
+            .eq('user_id', user.id)
+        ]);
 
-        if (daysError) throw daysError;
-        setPlanDays(days);
+        if (daysRes.error) throw daysRes.error;
+        setPlanDays(daysRes.data || []);
 
-        // Fetch shopping list
-        const { data: lists } = await supabase
-          .from('shopping_lists')
-          .select('id')
-          .eq('meal_plan_id', activePlan.id)
-          .eq('user_id', user.id);
-
-        if (lists && lists.length > 0) {
-          setShoppingListId(lists[0].id);
-          const { data: items } = await supabase
+        const lists = listsRes.data || [];
+        if (lists.length > 0) {
+          const listId = lists[0].id;
+          setShoppingListId(listId);
+          const { data: items, error: itemsError } = await supabase
             .from('shopping_list_items')
             .select('*')
-            .eq('shopping_list_id', lists[0].id)
+            .eq('shopping_list_id', listId)
             .order('categoria', { ascending: true })
             .order('alimento', { ascending: true });
+          
+          if (itemsError) throw itemsError;
           setShoppingList(items || []);
         }
       }

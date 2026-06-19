@@ -50,67 +50,66 @@ export default function DashboardPage() {
     try {
       setLoading(true);
 
-      // 1. Controllo se l'utente ha mai inserito un pasto in assoluto (per l'Onboarding)
-      const { count } = await supabase
-        .from('meal_entries')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
-      setHasAnyMeal(count > 0);
-
-      if (count === 0) {
-        setLoading(false);
-        return; // Fermati qui, mostreremo l'onboarding
-      }
-
-      // Fetch lifestyle data
-      const ls = await lifestyleEngine.getTodayLifestyleContext(user.id);
-      setLifestyleContext(ls);
-
-      // Fetch active medications and check interactions
-      const meds = await healthEngine.getMedications(user.id);
-      const activeMeds = (meds || []).filter(m => m.is_active);
-      const warnings = medicalKnowledgeEngine.checkMedicationInteractions(activeMeds);
-      setDrugWarnings(warnings);
-
-      // Fetch Health Coach Context
-      try {
-        const coachData = await getHealthCoachContext(supabase, user.id);
-        setCoachContext(coachData);
-      } catch (e) {
-        console.error("Error loading coach context:", e);
-      }
-
-      // 2. Fetch degli alimenti per i suggerimenti quantitativi
-      const { data: foodsData } = await supabase
-        .from('foods')
-        .select(`
-          id, name, category,
-          calories, proteins, carbs, fats, fiber, water, omega3, omega6,
-          food_nutrients ( nutrient_key, nutrient_name, amount, unit )
-        `);
-      setFoods(foodsData || []);
-
-      // 3. Fetch pasti ultimi 7 giorni
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       const cutoffStr = sevenDaysAgo.toISOString().split('T')[0];
       const todayStr = new Date().toISOString().split('T')[0];
 
-      const { data: mealsData } = await supabase
-        .from('meal_entries')
-        .select(`
-          id, quantity_grams, entry_date,
-          foods (
+      // Parallelize all baseline dashboard queries
+      const [
+        countRes,
+        lsRes,
+        medsRes,
+        coachRes,
+        foodsRes,
+        mealsRes
+      ] = await Promise.all([
+        supabase
+          .from('meal_entries')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id),
+        lifestyleEngine.getTodayLifestyleContext(user.id).catch(e => { console.error(e); return null; }),
+        healthEngine.getMedications(user.id).catch(e => { console.error(e); return []; }),
+        getHealthCoachContext(supabase, user.id).catch(e => { console.error(e); return null; }),
+        supabase
+          .from('foods')
+          .select(`
             id, name, category,
             calories, proteins, carbs, fats, fiber, water, omega3, omega6,
             food_nutrients ( nutrient_key, nutrient_name, amount, unit )
-          )
-        `)
-        .eq('user_id', user.id)
-        .gte('entry_date', cutoffStr);
+          `),
+        supabase
+          .from('meal_entries')
+          .select(`
+            id, quantity_grams, entry_date,
+            foods (
+              id, name, category,
+              calories, proteins, carbs, fats, fiber, water, omega3, omega6,
+              food_nutrients ( nutrient_key, nutrient_name, amount, unit )
+            )
+          `)
+          .eq('user_id', user.id)
+          .gte('entry_date', cutoffStr)
+      ]);
 
-      const processedMeals = (mealsData || []).map(m => {
+      const count = countRes.count || 0;
+      setHasAnyMeal(count > 0);
+
+      if (count === 0) {
+        setLoading(false);
+        return; // Empty state onboarding
+      }
+
+      setLifestyleContext(lsRes);
+
+      const activeMeds = (medsRes || []).filter(m => m.is_active);
+      const warnings = medicalKnowledgeEngine.checkMedicationInteractions(activeMeds);
+      setDrugWarnings(warnings);
+
+      setCoachContext(coachRes);
+      setFoods(foodsRes.data || []);
+
+      const processedMeals = (mealsRes.data || []).map(m => {
         if (!m.foods) return null;
         const calc = engine.calculateMealNutrients(m.foods, m.quantity_grams);
         return { ...calc, entry_date: m.entry_date };

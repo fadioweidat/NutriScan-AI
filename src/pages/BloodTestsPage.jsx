@@ -49,36 +49,35 @@ export default function BloodTestsPage() {
       setHealthProfile(profile);
 
       if (profile?.privacy_consent) {
-        // 2. Fetch Blood Test Reports (descending order of test date)
-        const { data: reportsData, error: reportsErr } = await supabase
-          .from('blood_test_reports')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('test_date', { ascending: false });
+        // Parallelize queries for reports, biomarkers, medications, and lifestyle context
+        const [reportsRes, biomarkersRes, medsRes, lsRes] = await Promise.all([
+          supabase
+            .from('blood_test_reports')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('test_date', { ascending: false }),
+          supabase
+            .from('blood_test_biomarkers')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: true }),
+          healthEngine.getMedications(user.id).catch(e => { console.error(e); return []; }),
+          lifestyleEngine.getTodayLifestyleContext(user.id).catch(e => { console.error(e); return null; })
+        ]);
 
-        if (reportsErr) throw reportsErr;
-        setReports(reportsData || []);
+        if (reportsRes.error) throw reportsRes.error;
+        const reportsData = reportsRes.data || [];
+        setReports(reportsData);
 
-        if (reportsData && reportsData.length > 0) {
+        if (reportsData.length > 0) {
           setSelectedReportId(reportsData[0].id);
         }
 
-        // 3. Fetch Biomarkers
-        const { data: biomarkersData, error: biomarkersErr } = await supabase
-          .from('blood_test_biomarkers')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: true }); // chronological order for trends
+        if (biomarkersRes.error) throw biomarkersRes.error;
+        setBiomarkers(biomarkersRes.data || []);
 
-        if (biomarkersErr) throw biomarkersErr;
-        setBiomarkers(biomarkersData || []);
-
-        // 4. Fetch medications & lifestyle context
-        const meds = await healthEngine.getMedications(user.id);
-        setMedications((meds || []).filter(m => m.is_active));
-
-        const ls = await lifestyleEngine.getTodayLifestyleContext(user.id);
-        setLifestyleContext(ls);
+        setMedications((medsRes || []).filter(m => m.is_active));
+        setLifestyleContext(lsRes);
       }
     } catch (err) {
       console.error("Error loading blood test data:", err);

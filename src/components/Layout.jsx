@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import ErrorBoundary from './ErrorBoundary';
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -151,7 +152,9 @@ export default function Layout({ children }) {
 
         {/* Page content */}
         <main className="flex-1 p-4 md:p-8 page-enter">
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </main>
 
         {/* Footer with medical disclaimer */}

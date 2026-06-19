@@ -16,41 +16,51 @@ export async function getHealthCoachContext(supabase, userId) {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
 
-    // 1. Fetch Health Profile & Context
-    const { data: profile } = await supabase
-      .from('health_profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
+    // Parallel fetch of all independent health profile, logs, and entries
+    const [
+      profileRes,
+      conditionsRes,
+      allergiesRes,
+      medicationsRes,
+      supplementsRes,
+      reportsRes,
+      sleepLogsRes,
+      stressLogsRes,
+      hydrationLogsRes,
+      activityLogsRes,
+      mealEntriesRes
+    ] = await Promise.all([
+      supabase.from('health_profiles').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('user_conditions').select('*').eq('user_id', userId),
+      supabase.from('user_allergies').select('*').eq('user_id', userId),
+      supabase.from('user_medications').select('*').eq('user_id', userId).eq('is_active', true),
+      supabase.from('user_supplements').select('*').eq('user_id', userId).eq('is_active', true),
+      supabase.from('blood_test_reports').select('*').eq('user_id', userId).order('test_date', { ascending: false }),
+      supabase.from('sleep_logs').select('*').eq('user_id', userId).gte('entry_date', thirtyDaysAgoStr),
+      supabase.from('stress_logs').select('*').eq('user_id', userId).gte('entry_date', thirtyDaysAgoStr),
+      supabase.from('hydration_logs').select('*').eq('user_id', userId).gte('entry_date', thirtyDaysAgoStr),
+      supabase.from('activity_logs').select('*').eq('user_id', userId).gte('entry_date', thirtyDaysAgoStr),
+      supabase.from('meal_entries').select(`
+        id, quantity_grams, entry_date,
+        foods (
+          id, name, category,
+          calories, proteins, carbs, fats, fiber, water, omega3, omega6,
+          food_nutrients ( nutrient_key, nutrient_name, amount, unit )
+        )
+      `).eq('user_id', userId).gte('entry_date', thirtyDaysAgoStr)
+    ]);
 
-    const { data: conditions } = await supabase
-      .from('user_conditions')
-      .select('*')
-      .eq('user_id', userId);
-
-    const { data: allergies } = await supabase
-      .from('user_allergies')
-      .select('*')
-      .eq('user_id', userId);
-
-    const { data: medications } = await supabase
-      .from('user_medications')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('is_active', true);
-
-    const { data: supplements } = await supabase
-      .from('user_supplements')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('is_active', true);
-
-    // 2. Fetch Blood Tests (biomarkers)
-    const { data: reports } = await supabase
-      .from('blood_test_reports')
-      .select('*')
-      .eq('user_id', userId)
-      .order('test_date', { ascending: false });
+    const profile = profileRes.data;
+    const conditions = conditionsRes.data;
+    const allergies = allergiesRes.data;
+    const medications = medicationsRes.data;
+    const supplements = supplementsRes.data;
+    const reports = reportsRes.data;
+    const sleepLogs = sleepLogsRes.data;
+    const stressLogs = stressLogsRes.data;
+    const hydrationLogs = hydrationLogsRes.data;
+    const activityLogs = activityLogsRes.data;
+    const mealEntries = mealEntriesRes.data;
 
     let latestReportBiomarkers = [];
     if (reports && reports.length > 0) {
@@ -60,45 +70,6 @@ export async function getHealthCoachContext(supabase, userId) {
         .eq('report_id', reports[0].id);
       latestReportBiomarkers = biomarkers || [];
     }
-
-    // 3. Fetch Lifestyle logs (Today & Last 30 Days)
-    const { data: sleepLogs } = await supabase
-      .from('sleep_logs')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('entry_date', thirtyDaysAgoStr);
-
-    const { data: stressLogs } = await supabase
-      .from('stress_logs')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('entry_date', thirtyDaysAgoStr);
-
-    const { data: hydrationLogs } = await supabase
-      .from('hydration_logs')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('entry_date', thirtyDaysAgoStr);
-
-    const { data: activityLogs } = await supabase
-      .from('activity_logs')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('entry_date', thirtyDaysAgoStr);
-
-    // 4. Fetch Meal Entries & normalize totals (Today & Last 30 Days)
-    const { data: mealEntries } = await supabase
-      .from('meal_entries')
-      .select(`
-        id, quantity_grams, entry_date,
-        foods (
-          id, name, category,
-          calories, proteins, carbs, fats, fiber, water, omega3, omega6,
-          food_nutrients ( nutrient_key, nutrient_name, amount, unit )
-        )
-      `)
-      .eq('user_id', userId)
-      .gte('entry_date', thirtyDaysAgoStr);
 
     // Group meals by date to calculate historical totals
     const mealsByDate = {};

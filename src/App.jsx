@@ -1,22 +1,23 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 
-// Pages
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import AddMealPage from './pages/AddMealPage';
-import DailyDiaryPage from './pages/DailyDiaryPage';
-import WeeklyReportPage from './pages/WeeklyReportPage';
-import NutrientCalendarPage from './pages/NutrientCalendarPage';
-import AiChatPage from './pages/AiChatPage';
-import ProfilePage from './pages/ProfilePage';
-import DietSettingsPage from './pages/DietSettingsPage';
-import HealthProfilePage from './pages/HealthProfilePage';
-import MedicationsPage from './pages/MedicationsPage';
-import LifestylePage from './pages/LifestylePage';
-import BloodTestsPage from './pages/BloodTestsPage';
-import MealPlannerPage from './pages/MealPlannerPage';
+// Lazy loaded pages
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const AddMealPage = lazy(() => import('./pages/AddMealPage'));
+const DailyDiaryPage = lazy(() => import('./pages/DailyDiaryPage'));
+const WeeklyReportPage = lazy(() => import('./pages/WeeklyReportPage'));
+const NutrientCalendarPage = lazy(() => import('./pages/NutrientCalendarPage'));
+const AiChatPage = lazy(() => import('./pages/AiChatPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const DietSettingsPage = lazy(() => import('./pages/DietSettingsPage'));
+const HealthProfilePage = lazy(() => import('./pages/HealthProfilePage'));
+const MedicationsPage = lazy(() => import('./pages/MedicationsPage'));
+const LifestylePage = lazy(() => import('./pages/LifestylePage'));
+const BloodTestsPage = lazy(() => import('./pages/BloodTestsPage'));
+const MealPlannerPage = lazy(() => import('./pages/MealPlannerPage'));
 
 // Protected route wrapper — redirects to /login if not authenticated
 function ProtectedRoute() {
@@ -36,7 +37,13 @@ function ProtectedRoute() {
 
   return (
     <Layout>
-      <Outlet />
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="w-8 h-8 border-2 border-lime-500/30 border-t-lime-500 rounded-full animate-spin" />
+        </div>
+      }>
+        <Outlet />
+      </Suspense>
     </Layout>
   );
 }
@@ -57,7 +64,15 @@ function PublicRoute() {
     return <Navigate to="/" replace />;
   }
 
-  return <Outlet />;
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-lime-500/30 border-t-lime-500 rounded-full animate-spin" />
+      </div>
+    }>
+      <Outlet />
+    </Suspense>
+  );
 }
 
 export default function App() {

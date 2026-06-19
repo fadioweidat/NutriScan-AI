@@ -43,14 +43,82 @@ export default function AiChatPage() {
       const sevenDaysAgo = new Date(today);
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      const { data: meals } = await supabase
-        .from('meal_entries')
-        .select(`
-          *,
-          foods (*, food_nutrients (*))
-        `)
-        .gte('entry_date', sevenDaysAgo.toISOString().split('T')[0]);
+      // Helper to fetch meal planner data concurrently
+      const fetchMealPlannerContext = async (userId) => {
+        const getMondayOfCurrentWeek = () => {
+          const d = new Date();
+          const day = d.getDay();
+          const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+          const mon = new Date(d.setDate(diff));
+          return mon.toISOString().split('T')[0];
+        };
+        const mondayStr = getMondayOfCurrentWeek();
 
+        const { data: plans } = await supabase
+          .from('meal_plans')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('week_start', mondayStr)
+          .order('created_at', { ascending: false });
+
+        if (plans && plans.length > 0) {
+          const activePlan = plans[0];
+
+          const [daysRes, listRes] = await Promise.all([
+            supabase.from('meal_plan_days').select('*').eq('meal_plan_id', activePlan.id).order('created_at', { ascending: true }),
+            supabase.from('shopping_lists').select('id').eq('meal_plan_id', activePlan.id)
+          ]);
+
+          let listItems = [];
+          if (listRes.data && listRes.data.length > 0) {
+            const { data: items } = await supabase
+              .from('shopping_list_items')
+              .select('*')
+              .eq('shopping_list_id', listRes.data[0].id);
+            listItems = items || [];
+          }
+
+          const days = daysRes.data || [];
+          return {
+            diet_type: activePlan.diet_type,
+            calories_target: activePlan.calories_target,
+            // Optimized: only send food names and macro aggregates to keep AI payload small
+            days: days.map(d => ({
+              day: d.day_of_week,
+              breakfast: d.breakfast?.name || '',
+              lunch: d.lunch?.name || '',
+              dinner: d.dinner?.name || '',
+              snacks: d.snacks?.name || '',
+              macros: { Kcal: d.calories, Prot: d.proteins, Carbs: d.carbs, Fats: d.fats }
+            })),
+            shopping_list: listItems.map(item => ({ alimento: item.alimento, quantita: item.quantita, categoria: item.categoria, completato: item.completato }))
+          };
+        }
+        return null;
+      };
+
+      // Parallelize baseline context fetches
+      const [
+        mealsRes,
+        healthContext,
+        lifestyleContext,
+        healthCoachContext,
+        mealPlannerContext
+      ] = await Promise.all([
+        supabase
+          .from('meal_entries')
+          .select(`
+            *,
+            foods (*, food_nutrients (*))
+          `)
+          .gte('entry_date', sevenDaysAgo.toISOString().split('T')[0]),
+        healthEngine.getFullHealthContext(user.id).catch(e => { console.error(e); return null; }),
+        lifestyleEngine.getTodayLifestyleContext(user.id).catch(e => { console.error(e); return null; }),
+        getHealthCoachContext(supabase, user.id).catch(e => { console.error(e); return null; }),
+        fetchMealPlannerContext(user.id).catch(e => { console.error(e); return null; })
+      ]);
+
+      const meals = mealsRes.data;
       if (!meals || meals.length === 0) {
         setHasMeals(false);
         return;
@@ -74,69 +142,8 @@ export default function AiChatPage() {
       const todayReconstructed = reconstructMeals(todayMeals);
       const todayTotals = engine.calculateDailyTotals(todayReconstructed);
       
-      const healthContext = await healthEngine.getFullHealthContext(user.id);
-      const lifestyleContext = await lifestyleEngine.getTodayLifestyleContext(user.id);
       const medicalContext = medicalKnowledgeEngine.generateMedicalContext(healthContext);
       const scientificContext = scientificNutritionEngine.generateScientificContext(healthContext, lifestyleContext);
-      
-      let healthCoachContext = null;
-      try {
-        healthCoachContext = await getHealthCoachContext(supabase, user.id);
-      } catch (e) {
-        console.error("Error fetching healthCoachContext for chat:", e);
-      }
-
-      let mealPlannerContext = null;
-      try {
-        const getMondayOfCurrentWeek = () => {
-          const d = new Date();
-          const day = d.getDay();
-          const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-          const mon = new Date(d.setDate(diff));
-          return mon.toISOString().split('T')[0];
-        };
-        const mondayStr = getMondayOfCurrentWeek();
-
-        const { data: plans } = await supabase
-          .from('meal_plans')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('week_start', mondayStr)
-          .order('created_at', { ascending: false });
-
-        if (plans && plans.length > 0) {
-          const activePlan = plans[0];
-
-          const { data: days } = await supabase
-            .from('meal_plan_days')
-            .select('*')
-            .eq('meal_plan_id', activePlan.id)
-            .order('created_at', { ascending: true });
-
-          const { data: list } = await supabase
-            .from('shopping_lists')
-            .select('id')
-            .eq('meal_plan_id', activePlan.id);
-
-          let listItems = [];
-          if (list && list.length > 0) {
-            const { data: items } = await supabase
-              .from('shopping_list_items')
-              .select('*')
-              .eq('shopping_list_id', list[0].id);
-            listItems = items || [];
-          }
-
-          mealPlannerContext = {
-            diet_type: activePlan.diet_type,
-            calories_target: activePlan.calories_target,
-            days: days || [],
-            shopping_list: listItems.map(item => ({ alimento: item.alimento, quantita: item.quantita, categoria: item.categoria, completato: item.completato }))
-          };
-        }
-      } catch (err) {
-        console.error("Error fetching mealPlannerContext for chat:", err);
-      }
       
       const rda = engine.getRDA(profile, healthContext);
       const score = engine.calculateNutritionScore(todayTotals, profile); // fixed bug: passing profile instead of rda
@@ -153,10 +160,25 @@ export default function AiChatPage() {
       const avgTotals = engine.calculateAverageTotals(daysTotals);
       const priorities = engine.getTopNutritionalPriorities(avgTotals, rda, 3, profile);
 
+      // Clean healthContext payload to avoid sending DB metadata, timestamps, and keys to the AI
+      const cleanedHealthContext = {
+        conditions: (healthContext?.conditions || []).map(c => ({ condition_name: c.condition_name, diagnosed_date: c.diagnosed_date })),
+        allergies: (healthContext?.allergies || []).map(a => ({ allergy_name: a.allergy_name, severity: a.severity })),
+        intolerances: (healthContext?.intolerances || []).map(i => ({ intolerance_name: i.intolerance_name, severity: i.severity })),
+        medications: (healthContext?.medications || []).map(m => ({ medication_name: m.medication_name, dosage: m.dosage, frequency: m.frequency })),
+        supplements: (healthContext?.supplements || []).map(s => ({ supplement_name: s.supplement_name, dosage: s.dosage, frequency: s.frequency }))
+      };
+
       setContextData({
         diet: profile?.diet_type || 'standard',
-        healthContext: healthContext,
-        lifestyleContext: lifestyleContext,
+        healthContext: cleanedHealthContext,
+        lifestyleContext: {
+          sleep: lifestyleContext?.sleep,
+          stress: lifestyleContext?.stress,
+          hydration: lifestyleContext?.hydration,
+          activity: lifestyleContext?.activity,
+          digestion: lifestyleContext?.digestion
+        },
         medicalContext: medicalContext,
         scientificContext: scientificContext,
         healthCoachContext: healthCoachContext,
