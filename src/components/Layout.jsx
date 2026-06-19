@@ -14,7 +14,8 @@ import {
   Leaf,
   AlertTriangle,
   BrainCircuit,
-  CalendarDays
+  CalendarDays,
+  Droplet
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { to: '/lifestyle',      label: 'Lifestyle',          icon: User },
   { to: '/health-profile', label: 'Profilo Salute',     icon: AlertTriangle },
   { to: '/medications',    label: 'Farmaci & Int.',     icon: BookOpen },
+  { to: '/blood-tests',    label: 'Esami del Sangue',   icon: Droplet },
   { to: '/profile',        label: 'Profilo Utente',     icon: User },
   { to: '/diet-settings',  label: 'Impostazioni Dieta', icon: Settings },
 ];
