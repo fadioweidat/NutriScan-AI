@@ -13,6 +13,8 @@ import LifestyleSummaryCard from '../components/dashboard/LifestyleSummaryCard';
 import lifestyleEngine from '../lib/lifestyle-engine';
 import healthEngine from '../lib/health-engine';
 import medicalKnowledgeEngine from '../lib/engines/medical-knowledge-engine';
+import { getHealthCoachContext } from '../lib/engines/health-coach-engine';
+import AiHealthSummary from '../components/dashboard/AiHealthSummary';
 
 import { Plus, FileBarChart, Sparkles, BrainCircuit, Activity, Salad, Loader2, AlertTriangle } from 'lucide-react';
 
@@ -36,6 +38,7 @@ export default function DashboardPage() {
   const [foods, setFoods] = useState([]);
   const [lifestyleContext, setLifestyleContext] = useState(null);
   const [drugWarnings, setDrugWarnings] = useState([]);
+  const [coachContext, setCoachContext] = useState(null);
 
   useEffect(() => {
     if (!user) return;
@@ -68,6 +71,14 @@ export default function DashboardPage() {
       const activeMeds = (meds || []).filter(m => m.is_active);
       const warnings = medicalKnowledgeEngine.checkMedicationInteractions(activeMeds);
       setDrugWarnings(warnings);
+
+      // Fetch Health Coach Context
+      try {
+        const coachData = await getHealthCoachContext(supabase, user.id);
+        setCoachContext(coachData);
+      } catch (e) {
+        console.error("Error loading coach context:", e);
+      }
 
       // 2. Fetch degli alimenti per i suggerimenti quantitativi
       const { data: foodsData } = await supabase
@@ -205,6 +216,9 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* AI Health Summary Widget */}
+      {coachContext && <AiHealthSummary context={coachContext} />}
 
       {/* 2. Macro e Calorie */}
       <div className="mb-4">

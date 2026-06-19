@@ -6,6 +6,7 @@ import healthEngine from '../lib/health-engine';
 import lifestyleEngine from '../lib/lifestyle-engine';
 import medicalKnowledgeEngine from '../lib/engines/medical-knowledge-engine';
 import scientificNutritionEngine from '../lib/engines/scientific-nutrition-engine';
+import { getHealthCoachContext } from '../lib/engines/health-coach-engine';
 import { Send, Bot, User, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
 
 const QUICK_PROMPTS = [
@@ -77,6 +78,12 @@ export default function AiChatPage() {
       const lifestyleContext = await lifestyleEngine.getTodayLifestyleContext(user.id);
       const medicalContext = medicalKnowledgeEngine.generateMedicalContext(healthContext);
       const scientificContext = scientificNutritionEngine.generateScientificContext(healthContext, lifestyleContext);
+      let healthCoachContext = null;
+      try {
+        healthCoachContext = await getHealthCoachContext(supabase, user.id);
+      } catch (e) {
+        console.error("Error fetching healthCoachContext for chat:", e);
+      }
       
       const rda = engine.getRDA(profile, healthContext);
       const score = engine.calculateNutritionScore(todayTotals, profile); // fixed bug: passing profile instead of rda
@@ -99,6 +106,7 @@ export default function AiChatPage() {
         lifestyleContext: lifestyleContext,
         medicalContext: medicalContext,
         scientificContext: scientificContext,
+        healthCoachContext: healthCoachContext,
         score: score,
         todayTotals: todayTotals,
         okNutrients: comparison.ok,
