@@ -16,6 +16,7 @@ import HealthProfilePage from './pages/HealthProfilePage';
 import MedicationsPage from './pages/MedicationsPage';
 import LifestylePage from './pages/LifestylePage';
 import BloodTestsPage from './pages/BloodTestsPage';
+import MealPlannerPage from './pages/MealPlannerPage';
 
 // Protected route wrapper — redirects to /login if not authenticated
 function ProtectedRoute() {
@@ -83,6 +84,7 @@ export default function App() {
             <Route path="/medications" element={<MedicationsPage />} />
             <Route path="/lifestyle" element={<LifestylePage />} />
             <Route path="/blood-tests" element={<BloodTestsPage />} />
+            <Route path="/meal-planner" element={<MealPlannerPage />} />
           </Route>
 
           {/* Fallback */}

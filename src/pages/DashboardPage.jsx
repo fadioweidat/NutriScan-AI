@@ -15,6 +15,7 @@ import healthEngine from '../lib/health-engine';
 import medicalKnowledgeEngine from '../lib/engines/medical-knowledge-engine';
 import { getHealthCoachContext } from '../lib/engines/health-coach-engine';
 import AiHealthSummary from '../components/dashboard/AiHealthSummary';
+import WeeklyMealPlanCard from '../components/dashboard/WeeklyMealPlanCard';
 
 import { Plus, FileBarChart, Sparkles, BrainCircuit, Activity, Salad, Loader2, AlertTriangle } from 'lucide-react';
 
@@ -219,6 +220,9 @@ export default function DashboardPage() {
 
       {/* AI Health Summary Widget */}
       {coachContext && <AiHealthSummary context={coachContext} />}
+
+      {/* Weekly Meal Plan Preview */}
+      <WeeklyMealPlanCard />
 
       {/* 2. Macro e Calorie */}
       <div className="mb-4">

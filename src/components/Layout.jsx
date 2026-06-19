@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   { to: '/diary',          label: 'Diario',             icon: BookOpen },
   { to: '/nutrient-map',   label: 'Mappa Nutrienti',    icon: CalendarDays },
   { to: '/report',         label: 'Report Settimanale', icon: BarChart3 },
+  { to: '/meal-planner',   label: 'Meal Planner',       icon: UtensilsCrossed },
   { to: '/ai-analysis',    label: 'Analisi AI',         icon: BrainCircuit },
   { to: '/lifestyle',      label: 'Lifestyle',          icon: User },
   { to: '/health-profile', label: 'Profilo Salute',     icon: AlertTriangle },

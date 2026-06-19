@@ -74,15 +74,68 @@ export default function AiChatPage() {
       const todayReconstructed = reconstructMeals(todayMeals);
       const todayTotals = engine.calculateDailyTotals(todayReconstructed);
       
-       const healthContext = await healthEngine.getFullHealthContext(user.id);
+      const healthContext = await healthEngine.getFullHealthContext(user.id);
       const lifestyleContext = await lifestyleEngine.getTodayLifestyleContext(user.id);
       const medicalContext = medicalKnowledgeEngine.generateMedicalContext(healthContext);
       const scientificContext = scientificNutritionEngine.generateScientificContext(healthContext, lifestyleContext);
+      
       let healthCoachContext = null;
       try {
         healthCoachContext = await getHealthCoachContext(supabase, user.id);
       } catch (e) {
         console.error("Error fetching healthCoachContext for chat:", e);
+      }
+
+      let mealPlannerContext = null;
+      try {
+        const getMondayOfCurrentWeek = () => {
+          const d = new Date();
+          const day = d.getDay();
+          const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+          const mon = new Date(d.setDate(diff));
+          return mon.toISOString().split('T')[0];
+        };
+        const mondayStr = getMondayOfCurrentWeek();
+
+        const { data: plans } = await supabase
+          .from('meal_plans')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('week_start', mondayStr)
+          .order('created_at', { ascending: false });
+
+        if (plans && plans.length > 0) {
+          const activePlan = plans[0];
+
+          const { data: days } = await supabase
+            .from('meal_plan_days')
+            .select('*')
+            .eq('meal_plan_id', activePlan.id)
+            .order('created_at', { ascending: true });
+
+          const { data: list } = await supabase
+            .from('shopping_lists')
+            .select('id')
+            .eq('meal_plan_id', activePlan.id);
+
+          let listItems = [];
+          if (list && list.length > 0) {
+            const { data: items } = await supabase
+              .from('shopping_list_items')
+              .select('*')
+              .eq('shopping_list_id', list[0].id);
+            listItems = items || [];
+          }
+
+          mealPlannerContext = {
+            diet_type: activePlan.diet_type,
+            calories_target: activePlan.calories_target,
+            days: days || [],
+            shopping_list: listItems.map(item => ({ alimento: item.alimento, quantita: item.quantita, categoria: item.categoria, completato: item.completato }))
+          };
+        }
+      } catch (err) {
+        console.error("Error fetching mealPlannerContext for chat:", err);
       }
       
       const rda = engine.getRDA(profile, healthContext);
@@ -107,6 +160,7 @@ export default function AiChatPage() {
         medicalContext: medicalContext,
         scientificContext: scientificContext,
         healthCoachContext: healthCoachContext,
+        mealPlannerContext: mealPlannerContext,
         score: score,
         todayTotals: todayTotals,
         okNutrients: comparison.ok,
