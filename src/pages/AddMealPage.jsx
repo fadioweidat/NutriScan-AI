@@ -8,6 +8,8 @@ import VoiceMealInput from '../components/VoiceMealInput';
 import FoodSearch from '../components/FoodSearch';
 import PhotoUpload from '../components/PhotoUpload';
 import { searchFoods } from '../lib/search-engine.js';
+import { enqueueAction } from '../lib/offline-db';
+import { isOnline } from '../lib/sync-manager';
 
 import { searchOpenFoodFactsByBarcode } from '../lib/openFoodFacts.js';
 import BarcodeScanner from '../components/BarcodeScanner';
@@ -203,6 +205,13 @@ export default function AddMealPage() {
         quantity_grams: item.quantityGrams,
         entry_date: new Date().toISOString().split('T')[0]
       }));
+
+      // Offline support: save to IndexedDB queue instead of directly hitting supabase
+      if (!isOnline()) {
+        await Promise.all(inserts.map(ins => enqueueAction('insert', 'meal_entries', ins)));
+        setSaved(true);
+        return;
+      }
 
       const { error: insertErr } = await supabase.from('meal_entries').insert(inserts);
       

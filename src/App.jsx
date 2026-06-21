@@ -1,7 +1,9 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
+import NetworkBanner from './components/NetworkBanner';
+import { requestNotificationPermission, scheduleHydrationReminder, scheduleMealReminder } from './lib/notification-manager';
 
 // Lazy loaded pages
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -76,6 +78,16 @@ function PublicRoute() {
 }
 
 export default function App() {
+  useEffect(() => {
+    // Request permission and schedule generic non-sensitive reminders
+    requestNotificationPermission().then((granted) => {
+      if (granted) {
+        scheduleHydrationReminder(2);
+        scheduleMealReminder();
+      }
+    });
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -105,6 +117,7 @@ export default function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <NetworkBanner />
       </AuthProvider>
     </BrowserRouter>
   );

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import lifestyleEngine from '../lib/lifestyle-engine';
 import { Moon, Activity, Droplets, HeartPulse, Stethoscope, Loader2, Save, Trash2, Plus } from 'lucide-react';
+import { enqueueAction } from '../lib/offline-db';
+import { isOnline } from '../lib/sync-manager';
 
 export default function LifestylePage() {
   const { user } = useAuth();
@@ -20,6 +22,11 @@ export default function LifestylePage() {
     if (!user) return;
     setLoading(true);
     try {
+      if (!isOnline()) {
+        console.log("[Lifestyle] Offline mode: loading baseline static states.");
+        setLoading(false);
+        return;
+      }
       const ctx = await lifestyleEngine.getTodayLifestyleContext(user.id);
       if (ctx.sleep) setSleep(ctx.sleep);
       if (ctx.stress) setStress(ctx.stress);
@@ -40,6 +47,20 @@ export default function LifestylePage() {
   const handleSaveForms = async () => {
     setSaving(true);
     try {
+      const dateString = new Date().toISOString().split('T')[0];
+
+      if (!isOnline()) {
+        console.log("[Lifestyle] Offline mode: enqueuing upserts in IndexedDB.");
+        await Promise.all([
+          enqueueAction('upsert', 'sleep_logs', { user_id: user.id, entry_date: dateString, ...sleep, id: undefined, created_at: undefined, updated_at: undefined }),
+          enqueueAction('upsert', 'stress_logs', { user_id: user.id, entry_date: dateString, ...stress, id: undefined, created_at: undefined, updated_at: undefined }),
+          enqueueAction('upsert', 'hydration_logs', { user_id: user.id, entry_date: dateString, ...hydration, id: undefined, created_at: undefined, updated_at: undefined }),
+          enqueueAction('upsert', 'digestion_logs', { user_id: user.id, entry_date: dateString, ...digestion, id: undefined, created_at: undefined, updated_at: undefined })
+        ]);
+        setSaving(false);
+        return;
+      }
+
       await Promise.all([
         lifestyleEngine.saveSleepLog(user.id, { ...sleep, id: undefined, user_id: undefined, created_at: undefined, updated_at: undefined }),
         lifestyleEngine.saveStressLog(user.id, { ...stress, id: undefined, user_id: undefined, created_at: undefined, updated_at: undefined }),
@@ -56,11 +77,28 @@ export default function LifestylePage() {
 
   const handleAddActivity = async () => {
     if (!newActivity.activity_type.trim()) return;
+    const dateString = new Date().toISOString().split('T')[0];
+    
     try {
-      const added = await lifestyleEngine.addActivity(user.id, {
+      const payload = {
         ...newActivity,
         calories_burned: newActivity.calories_burned ? parseInt(newActivity.calories_burned) : null
-      });
+      };
+
+      if (!isOnline()) {
+        const tempActivity = {
+          id: 'temp-' + Date.now(),
+          user_id: user.id,
+          entry_date: dateString,
+          ...payload
+        };
+        await enqueueAction('insert', 'activity_logs', tempActivity);
+        setActivities([...activities, tempActivity]);
+        setNewActivity({ activity_type: '', duration_minutes: 30, intensity: 'media', calories_burned: '' });
+        return;
+      }
+
+      const added = await lifestyleEngine.addActivity(user.id, payload);
       setActivities([...activities, added]);
       setNewActivity({ activity_type: '', duration_minutes: 30, intensity: 'media', calories_burned: '' });
     } catch (err) {
@@ -70,6 +108,12 @@ export default function LifestylePage() {
 
   const handleRemoveActivity = async (id) => {
     try {
+      if (!isOnline()) {
+        // If local temp activity, just filter it out. We don't support deleting offline synced actions easily without network,
+        // but local temp activities can be removed.
+        setActivities(activities.filter(a => a.id !== id));
+        return;
+      }
       await lifestyleEngine.removeActivity(id);
       setActivities(activities.filter(a => a.id !== id));
     } catch (err) {
