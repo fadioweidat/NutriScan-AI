@@ -13,6 +13,11 @@ import { computePredictiveTrends } from '../lib/engines/predictive-health-engine
 import { forecastBiomarkers } from '../lib/engines/forecast-engine';
 import { runSimulation } from '../lib/engines/simulation-engine';
 import dailyScoreEngine from '../lib/engines/daily-score-engine';
+import { buildEvidenceContext } from '../lib/engines/scientific-knowledge-engine';
+import { buildRagContext } from '../lib/engines/rag-engine';
+import { buildExplainabilityContext } from '../lib/engines/scientific-explainability-engine';
+import { buildKnowledgeUpdateContext } from '../lib/engines/knowledge-update-manager';
+import ScientificEvidenceCard from '../components/ScientificEvidenceCard';
 
 // Phase 8 Imports
 import manager from '../lib/connectors/health-provider-manager';
@@ -38,6 +43,7 @@ export default function AiChatPage() {
   
   const [hasMeals, setHasMeals] = useState(null);
   const [contextData, setContextData] = useState(null);
+  const [scientificDashboard, setScientificDashboard] = useState(null);
   
   const [messages, setMessages] = useState([
     { role: 'assistant', content: 'Ciao! Sono il tuo assistente nutrizionale. Posso aiutarti a capire cosa ti manca oggi o suggerirti come colmare i tuoi fabbisogni con alimenti specifici.' }
@@ -214,6 +220,7 @@ export default function AiChatPage() {
       
       const medicalContext = medicalKnowledgeEngine.generateMedicalContext(healthContext);
       const scientificContext = scientificNutritionEngine.generateScientificContext(healthContext, lifestyleContext);
+      const knowledgeUpdateContext = buildKnowledgeUpdateContext();
       
       const rda = engine.getRDA(profile, healthContext);
       const score = engine.calculateNutritionScore(todayTotals, profile);
@@ -387,6 +394,7 @@ export default function AiChatPage() {
         },
         medicalContext: medicalContext,
         scientificContext: scientificContext,
+        knowledgeUpdateContext,
         healthCoachContext: healthCoachContext,
         mealPlannerContext: mealPlannerContext,
         score: score,
@@ -433,10 +441,31 @@ export default function AiChatPage() {
     setLoading(true);
 
     try {
+      const scientificQuery = [
+        text,
+        contextData?.improveNutrients?.join(' '),
+        contextData?.missingNutrients?.join(' '),
+        contextData?.diet
+      ].filter(Boolean).join(' ');
+      const evidenceContext = buildEvidenceContext(scientificQuery);
+      const ragContext = buildRagContext(scientificQuery);
+      const explainabilityContext = buildExplainabilityContext(ragContext);
+      const enrichedContext = {
+        ...contextData,
+        evidenceContext,
+        ragContext,
+        explainabilityContext
+      };
+
+      setScientificDashboard({
+        evidenceContext,
+        knowledgeContext: contextData?.knowledgeUpdateContext
+      });
+
       const { data, error } = await supabase.functions.invoke('ai-nutrition-chat', {
         body: { 
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          context: contextData
+          context: enrichedContext
         }
       });
 
@@ -485,6 +514,15 @@ export default function AiChatPage() {
           <p className="text-cyan-400/80 text-sm font-medium">Assistente Personale</p>
         </div>
       </div>
+
+      {scientificDashboard && (
+        <div className="px-6 pt-4 shrink-0">
+          <ScientificEvidenceCard
+            evidenceContext={scientificDashboard.evidenceContext}
+            knowledgeContext={scientificDashboard.knowledgeContext}
+          />
+        </div>
+      )}
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">

@@ -127,6 +127,12 @@ REGOLE FONDAMENTALI (VIETATO VIOLARLE):
       * Previsioni (es. andamenti futuri di biomarcatori o peso).
     - Per ogni insight da wearable, spiega l'origine del dato (dispositivo/sensore se indicato), la sincronizzazione (es. oggi), il livello di affidabilità (🟢 Alta per misure dirette, 🟡 Media per sonno stimato, 🔵 Limitata per calorie bruciate attive/BMR stimati) ed eventuali dati mancanti.
 
+16. SCIENTIFIC RAG: Quando usi il RAG scientifico, cita le evidenze disponibili indicando titolo o fonte sintetica, data di pubblicazione, livello dell'evidenza e confidenza. Privilegia sempre Livello A rispetto a B, B rispetto a C, C rispetto a D, D rispetto a E.
+17. FATTI VS IPOTESI: Distingui chiaramente fra fatti scientifici supportati da evidenze, inferenze nutrizionali basate sui dati dell'utente e ipotesi educative.
+18. INCERTEZZA: Se il contesto RAG contiene prove limitate, indirette o pochi studi, dichiaralo esplicitamente e usa formule come "le prove sono limitate" o "l'evidenza e indiretta".
+19. LIMITI DELLE FONTI: Quando formuli una raccomandazione educativa, includi almeno un limite rilevante dello studio o della fonte se disponibile.
+20. NESSUNA ESTENSIONE CLINICA: Le evidenze scientifiche non autorizzano diagnosi, prescrizioni, cambi di terapia o sostituzione del medico.
+
 DIGITAL TWIN CONTEXT (digitalTwinContext):
 ${JSON.stringify(sanitizedContext.digitalTwinContext || {}, null, 2)}
 
@@ -187,6 +193,18 @@ ${JSON.stringify(sanitizedContext.medicalContext || {}, null, 2)}
 
 CONTESTO SCIENTIFICO (SCIENTIFIC NUTRITION ENGINE):
 ${JSON.stringify(sanitizedContext.scientificContext || {}, null, 2)}
+
+EVIDENCE CONTEXT (SCIENTIFIC KNOWLEDGE ENGINE):
+${JSON.stringify(sanitizedContext.evidenceContext || {}, null, 2)}
+
+RAG CONTEXT (RETRIEVAL-AUGMENTED GENERATION):
+${JSON.stringify(sanitizedContext.ragContext || {}, null, 2)}
+
+EXPLAINABILITY CONTEXT:
+${JSON.stringify(sanitizedContext.explainabilityContext || {}, null, 2)}
+
+KNOWLEDGE UPDATE CONTEXT:
+${JSON.stringify(sanitizedContext.knowledgeUpdateContext || {}, null, 2)}
 `;
 
     const openAiMessages = [
