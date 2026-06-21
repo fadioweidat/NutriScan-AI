@@ -19,45 +19,48 @@ export default function BillingSettings() {
   const [activePortal, setActivePortal] = useState(false); // Simulated Stripe customer portal overlay
   const [portalActionMsg, setPortalActionMsg] = useState('');
 
-  // Starts simulated checkout session
+  // Starts Stripe Checkout session
   const handleCheckout = async (targetTier) => {
     setLoading(true);
     try {
       const res = await StripeSimulator.createCheckoutSession(user.id, targetTier, 'monthly');
-      console.log("[Stripe Simulator] Redirecting to Checkout Session URL:", res.url);
-      
-      // Simulate Stripe Webhook callback update locally
-      await StripeSimulator.triggerLocalMockWebhook(user.id, targetTier);
-      
-      alert(`[Stripe Checkout Simulator] Pagamento completato con successo. Il tuo account è stato aggiornato al piano ${targetTier.toUpperCase()}!`);
-      // Reload page to refresh session state
-      window.location.reload();
+      if (res && res.url) {
+        window.location.href = res.url;
+      }
     } catch (e) {
       console.error(e);
+      alert("Errore nell'apertura della sessione di checkout.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Open simulated Customer Portal overlay
-  const handleOpenPortal = () => {
-    setActivePortal(true);
-    setPortalActionMsg('');
+  // Open Stripe Customer Portal
+  const handleOpenPortal = async () => {
+    setLoading(true);
+    try {
+      const res = await StripeSimulator.createPortalSession(user.id);
+      if (res && res.url) {
+        window.location.href = res.url;
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Errore nell'apertura del portale di fatturazione.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Handle plan updates inside simulated Portal
+  // Handle plan updates inside simulated Portal (fallback / legacy support)
   const handlePortalAction = async (action, targetTier = null) => {
     setLoading(true);
     try {
       if (action === 'cancel') {
-        await StripeSimulator.triggerLocalMockWebhook(user.id, SUBSCRIPTION_TIERS.FREE);
-        setPortalActionMsg('Abbonamento annullato con successo. Il tuo piano è tornato a Free.');
+        setPortalActionMsg('Richiesta inviata. Il piano verrà aggiornato via webhook.');
       } else if (action === 'upgrade' && targetTier) {
-        await StripeSimulator.triggerLocalMockWebhook(user.id, targetTier);
-        setPortalActionMsg(`Upgrade completato con successo! Il tuo piano è ora ${targetTier.toUpperCase()}.`);
+        setPortalActionMsg(`Richiesta di upgrade a ${targetTier.toUpperCase()} inviata.`);
       } else if (action === 'downgrade' && targetTier) {
-        await StripeSimulator.triggerLocalMockWebhook(user.id, targetTier);
-        setPortalActionMsg(`Downgrade eseguito con successo. Il tuo piano è ora ${targetTier.toUpperCase()}.`);
+        setPortalActionMsg(`Richiesta di downgrade a ${targetTier.toUpperCase()} inviata.`);
       }
     } catch (e) {
       console.error(e);

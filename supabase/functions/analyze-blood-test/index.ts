@@ -1,12 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.21.0";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { getAuthoritativeUserTier, SUBSCRIPTION_TIERS } from "../_shared/subscription.ts";
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -78,6 +77,30 @@ serve(async (req) => {
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false },
     });
+
+    // Server-Side Subscription Verification & Feature Gating
+    const userTier = await getAuthoritativeUserTier(user);
+    if (userTier === SUBSCRIPTION_TIERS.FREE) {
+      // Free limit check: Max 3 blood test reports total
+      const { count, error: countError } = await adminClient
+        .from('blood_test_reports')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
+      if (countError) {
+        throw new Error(`Errore verifica limiti abbonamento: ${countError.message}`);
+      }
+
+      if (count && count >= 3) {
+        return new Response(JSON.stringify({ 
+          error: "Limite di 3 caricamenti referti raggiunto per il piano Free. Esegui l'upgrade a Pro per caricamenti illimitati." 
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
 
     if (textContent) {
       // PDF text extracted by frontend

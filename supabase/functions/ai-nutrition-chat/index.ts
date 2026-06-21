@@ -1,24 +1,90 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.21.0";
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { getAuthoritativeUserTier, SUBSCRIPTION_TIERS } from "../_shared/subscription.ts";
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
+        status: 401,
+        headers: corsHeaders
+      });
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized user' }), {
+        status: 401,
+        headers: corsHeaders
+      });
+    }
+
     const { messages, context } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: 'Messaggi non validi' }), { status: 400, headers: corsHeaders });
     }
 
-    // Valida rigorosamente la presenza del payload prima di affidarsi a GPT
-    if (!context || !context.todayTotals || Object.keys(context.todayTotals).length === 0) {
+    // Server-Side Subscription Verification & Feature Gating
+    const userTier = await getAuthoritativeUserTier(user);
+
+    // 1. AI Chat Message limit check (max 5 user prompts for Free tier)
+    if (userTier === SUBSCRIPTION_TIERS.FREE) {
+      const userMessagesCount = messages.filter((m: any) => m.role === 'user').length;
+      if (userMessagesCount > 5) {
+        return new Response(JSON.stringify({ 
+          error: "Limite di messaggi giornalieri del piano Free superato. Esegui l'upgrade a Pro o Premium per avere messaggi illimitati." 
+        }), {
+          status: 403,
+          headers: corsHeaders
+        });
+      }
+    }
+
+    // 2. Feature payload scrubbing/gating based on tier
+    let sanitizedContext = { ...context };
+
+    if (userTier === SUBSCRIPTION_TIERS.FREE) {
+      // Free users cannot sync or send Wearables context
+      if (sanitizedContext.wearableContext || sanitizedContext.recoveryContext || sanitizedContext.activityContext || sanitizedContext.heartContext || sanitizedContext.weightContext) {
+        return new Response(JSON.stringify({ 
+          error: "La sincronizzazione e l'analisi dei Wearables richiedono un piano Pro o Premium. Aggiorna il tuo piano per continuare." 
+        }), {
+          status: 403,
+          headers: corsHeaders
+        });
+      }
+    }
+
+    if (userTier === SUBSCRIPTION_TIERS.FREE || userTier === SUBSCRIPTION_TIERS.PRO) {
+      // Free and Pro users cannot access Digital Twin predictions/forecasts/simulations
+      if (sanitizedContext.digitalTwinContext || sanitizedContext.predictiveContext || sanitizedContext.forecastContext || sanitizedContext.simulationContext) {
+        return new Response(JSON.stringify({ 
+          error: "Le funzionalità del Gemello Digitale (Digital Twin, previsioni e simulazioni) sono riservate agli utenti Premium." 
+        }), {
+          status: 403,
+          headers: corsHeaders
+        });
+      }
+    }
+
+    // Validate the presence of payload before GPT call
+    if (!sanitizedContext || !sanitizedContext.todayTotals || Object.keys(sanitizedContext.todayTotals).length === 0) {
       return new Response(JSON.stringify({ 
         reply: "Ho bisogno di più dati alimentari per fornire un'analisi utile." 
       }), {
@@ -30,6 +96,7 @@ serve(async (req) => {
     if (!openAiApiKey) {
       throw new Error('OPENAI_API_KEY mancante in Supabase Secrets');
     }
+
     const systemPrompt = `Sei l'assistente nutrizionale AI di "NutriScan AI", il tuo ruolo è quello di un AI Health Coach intelligente ed educativo.
 Il tuo compito è aiutare l'utente a comprendere i suoi dati nutrizionali calcolati dal sistema, il suo stile di vita, i parametri clinici (esami, patologie, farmaci, integratori) e il suo Gemello Digitale (Digital Twin) con modelli predittivi e di simulazione.
 
@@ -61,65 +128,65 @@ REGOLE FONDAMENTALI (VIETATO VIOLARLE):
     - Per ogni insight da wearable, spiega l'origine del dato (dispositivo/sensore se indicato), la sincronizzazione (es. oggi), il livello di affidabilità (🟢 Alta per misure dirette, 🟡 Media per sonno stimato, 🔵 Limitata per calorie bruciate attive/BMR stimati) ed eventuali dati mancanti.
 
 DIGITAL TWIN CONTEXT (digitalTwinContext):
-${JSON.stringify(context.digitalTwinContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.digitalTwinContext || {}, null, 2)}
 
 PREDICTIVE CONTEXT (predictiveContext):
-${JSON.stringify(context.predictiveContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.predictiveContext || {}, null, 2)}
 
 FORECAST CONTEXT (forecastContext):
-${JSON.stringify(context.forecastContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.forecastContext || {}, null, 2)}
 
 SIMULATION CONTEXT (simulationContext):
-${JSON.stringify(context.simulationContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.simulationContext || {}, null, 2)}
 
 AI HEALTH COACH CONTEXT (healthCoachContext):
-${JSON.stringify(context.healthCoachContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.healthCoachContext || {}, null, 2)}
 
 WEARABLE CONTEXT (wearableContext):
-${JSON.stringify(context.wearableContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.wearableContext || {}, null, 2)}
 
 RECOVERY CONTEXT (recoveryContext):
-${JSON.stringify(context.recoveryContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.recoveryContext || {}, null, 2)}
 
 ACTIVITY CONTEXT (activityContext):
-${JSON.stringify(context.activityContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.activityContext || {}, null, 2)}
 
 HEART CONTEXT (heartContext):
-${JSON.stringify(context.heartContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.heartContext || {}, null, 2)}
 
 WEIGHT CONTEXT (weightContext):
-${JSON.stringify(context.weightContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.weightContext || {}, null, 2)}
 
 CONTESTO MEAL PLANNER SETTIMANALE (mealPlannerContext):
-${JSON.stringify(context.mealPlannerContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.mealPlannerContext || {}, null, 2)}
 
 CONTESTO UTENTE REALE:
-- Dieta selezionata: ${context.diet}
-- Score Nutrizionale Oggi: ${context.score}/100
-- Nutrienti OK (target raggiunto): ${context.okNutrients?.join(', ') || 'Nessuno'}
-- Nutrienti da migliorare (sotto target): ${context.improveNutrients?.join(', ') || 'Nessuno'}
-- Nutrienti con apporto basso (molto distanti dal target): ${context.missingNutrients?.join(', ') || 'Nessuno'}
-- Priorità nutrizionali urgenti (ultimi 7 giorni): ${context.sevenDayPriorities?.map((p: any) => p.nutrient || p.key).join(', ') || 'Nessuna priorità'}
+- Dieta selezionata: ${sanitizedContext.diet}
+- Score Nutrizionale Oggi: ${sanitizedContext.score}/100
+- Nutrienti OK (target raggiunto): ${sanitizedContext.okNutrients?.join(', ') || 'Nessuno'}
+- Nutrienti da migliorare (sotto target): ${sanitizedContext.improveNutrients?.join(', ') || 'Nessuno'}
+- Nutrienti con apporto basso (molto distanti dal target): ${sanitizedContext.missingNutrients?.join(', ') || 'Nessuno'}
+- Priorità nutrizionali urgenti (ultimi 7 giorni): ${sanitizedContext.sevenDayPriorities?.map((p: any) => p.nutrient || p.key).join(', ') || 'Nessuna priorità'}
 
 CONDIZIONI SALUTE E PROFILO (ESTREMAMENTE IMPORTANTE):
-- Patologie/Condizioni: ${context.healthContext?.conditions?.map((c:any) => c.condition_name).join(', ') || 'Nessuna'}
-- Allergie: ${context.healthContext?.allergies?.map((a:any) => a.allergy_name).join(', ') || 'Nessuna'}
-- Intolleranze: ${context.healthContext?.intolerances?.map((i:any) => i.intolerance_name).join(', ') || 'Nessuna'}
-- Farmaci assunti: ${context.healthContext?.medications?.map((m:any) => m.medication_name).join(', ') || 'Nessuno'}
-- Integratori assunti: ${context.healthContext?.supplements?.map((s:any) => s.supplement_name).join(', ') || 'Nessuno'}
+- Patologie/Condizioni: ${sanitizedContext.healthContext?.conditions?.map((c:any) => c.condition_name).join(', ') || 'Nessuna'}
+- Allergie: ${sanitizedContext.healthContext?.allergies?.map((a:any) => a.allergy_name).join(', ') || 'Nessuna'}
+- Intolleranze: ${sanitizedContext.healthContext?.intolerances?.map((i:any) => i.intolerance_name).join(', ') || 'Nessuna'}
+- Farmaci assunti: ${sanitizedContext.healthContext?.medications?.map((m:any) => m.medication_name).join(', ') || 'Nessuno'}
+- Integratori assunti: ${sanitizedContext.healthContext?.supplements?.map((s:any) => s.supplement_name).join(', ') || 'Nessuno'}
 
 STILE DI VITA OGGI:
-- Sonno: ${context.lifestyleContext?.sleep?.duration_hours ? context.lifestyleContext.sleep.duration_hours + ' ore' : 'Dato non inserito'}
-- Stress (1-10): ${context.lifestyleContext?.stress?.stress_level || 'Dato non inserito'}
-- Idratazione: ${context.lifestyleContext?.hydration?.water_ml ? context.lifestyleContext.hydration.water_ml + ' ml' : 'Dato non inserito'}
-- Attività fisica: ${context.lifestyleContext?.activities?.length ? context.lifestyleContext.activities.map((a:any) => a.activity_type + ' (' + a.duration_minutes + 'm)').join(', ') : 'Dato non inserito'}
-- Qualità Digestione (1-5): ${context.lifestyleContext?.digestion?.quality_score || 'Dato non inserito'}
+- Sonno: ${sanitizedContext.lifestyleContext?.sleep?.duration_hours ? sanitizedContext.lifestyleContext.sleep.duration_hours + ' ore' : 'Dato non inserito'}
+- Stress (1-10): ${sanitizedContext.lifestyleContext?.stress?.stress_level || 'Dato non inserito'}
+- Idratazione: ${sanitizedContext.lifestyleContext?.hydration?.water_ml ? sanitizedContext.lifestyleContext.hydration.water_ml + ' ml' : 'Dato non inserito'}
+- Attività fisica: ${sanitizedContext.lifestyleContext?.activities?.length ? sanitizedContext.lifestyleContext.activities.map((a:any) => a.activity_type + ' (' + a.duration_minutes + 'm)').join(', ') : 'Dato non inserito'}
+- Qualità Digestione (1-5): ${sanitizedContext.lifestyleContext?.digestion?.quality_score || 'Dato non inserito'}
 
 CONTESTO CLINICO (MEDICAL KNOWLEDGE ENGINE):
-${JSON.stringify(context.medicalContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.medicalContext || {}, null, 2)}
 
 CONTESTO SCIENTIFICO (SCIENTIFIC NUTRITION ENGINE):
-${JSON.stringify(context.scientificContext || {}, null, 2)}
+${JSON.stringify(sanitizedContext.scientificContext || {}, null, 2)}
 `;
 
     const openAiMessages = [

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import BillingSettings from '../components/BillingSettings.jsx';
 import AdminConsoleCard from '../components/AdminConsoleCard.jsx';
+import ProductionAdminDashboard from '../components/ProductionAdminDashboard.jsx';
 
 const GOALS = [
   { value: 'lose_weight', label: 'Perdere peso' },
@@ -385,7 +386,12 @@ export default function ProfilePage() {
             {isAdminActive ? 'Nascondi Console' : 'Mostra Console Admin'}
           </button>
         </div>
-        {isAdminActive && <AdminConsoleCard />}
+        {isAdminActive && (
+          <div className="space-y-6">
+            <AdminConsoleCard />
+            <ProductionAdminDashboard />
+          </div>
+        )}
       </div>
     </div>
   );

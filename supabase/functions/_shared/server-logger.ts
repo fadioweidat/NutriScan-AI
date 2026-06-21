@@ -29,7 +29,8 @@ const SENSITIVE_KEYS = new Set([
   'email', 'phone', 'telefono', 'name', 'surname', 'nome', 'cognome',
   'biomarkers', 'biomarcatori', 'reports', 'referti', 'medications', 'farmaci',
   'meals', 'pasti', 'conditions', 'patologie', 'allergie', 'intolleranze',
-  'jwt', 'cookie', 'authorization', 'bearer', 'token', 'password', 'apikey', 'key', 'secret'
+  'jwt', 'cookie', 'authorization', 'bearer', 'token', 'password', 'apikey', 'key', 'secret',
+  'diagnosi', 'diagnosis', 'ocr', 'allegati', 'attachments', 'attachment', 'allegato'
 ]);
 
 function cleanData(data: any): any {

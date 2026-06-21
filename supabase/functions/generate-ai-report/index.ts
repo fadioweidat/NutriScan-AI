@@ -1,14 +1,12 @@
-// NutriScan AI - Generate AI Report Edge Function
-// Requires GEMINI_API_KEY secret set in Supabase
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { GoogleGenerativeAI } from "npm:@google/generative-ai@0.21.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { getAuthoritativeUserTier, SUBSCRIPTION_TIERS } from "../_shared/subscription.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
 
-Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -42,6 +40,15 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "Non autorizzato" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Server-Side Subscription Verification & Feature Gating
+    const userTier = await getAuthoritativeUserTier(user);
+    if (userTier === SUBSCRIPTION_TIERS.FREE) {
+      return new Response(
+        JSON.stringify({ error: "La generazione di report nutrizionali avanzati via AI è riservata ai piani Pro o Premium. Aggiorna il tuo piano per accedere." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -90,7 +97,6 @@ Rispondi in formato JSON:
 
     let report;
     try {
-      // Try to parse as JSON, handle potential markdown wrapping
       const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       report = JSON.parse(cleaned);
     } catch {

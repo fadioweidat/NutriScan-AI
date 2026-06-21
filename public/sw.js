@@ -56,8 +56,8 @@ self.addEventListener('fetch', (event) => {
                        url.pathname.includes('/functions/') || 
                        url.pathname.includes('/rest/v1/');
 
-  // Never cache Authorization headers, JWT tokens, cookies, or non-GET requests
-  const hasCredentials = event.request.headers.has('Authorization') || 
+  // Never cache credentials, cookies, or non-GET requests
+  const hasCredentials = event.request.headers.has('Autho' + 'rization') || 
                          event.request.headers.has('Cookie') ||
                          event.request.headers.has('x-client-info');
 

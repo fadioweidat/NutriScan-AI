@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { ReleaseConfig } from '../lib/logger/monitoring-integration.js';
 import ErrorBoundary from './ErrorBoundary';
 import {
   LayoutDashboard,
@@ -140,6 +141,26 @@ export default function Layout({ children }) {
             >
               <LogOut className="w-4 h-4" />
             </button>
+          </div>
+          
+          {/* Version/Release Footer */}
+          <div className="mt-3 pt-2 border-t border-white/[0.04] px-3 font-mono text-[9px] text-slate-600 space-y-0.5">
+            <div className="flex justify-between">
+              <span>Version:</span>
+              <span className="text-slate-400">{ReleaseConfig.version} (b100)</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Commit:</span>
+              <span className="text-slate-400">{ReleaseConfig.commitHash}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Build Date:</span>
+              <span className="text-slate-400">{new Date(ReleaseConfig.buildDate).toLocaleDateString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Env:</span>
+              <span className="text-cyan-400 uppercase font-bold">{ReleaseConfig.environment}</span>
+            </div>
           </div>
         </div>
       </aside>

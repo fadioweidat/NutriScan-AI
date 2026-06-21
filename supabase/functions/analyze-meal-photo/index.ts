@@ -1,13 +1,10 @@
-// NutriScan AI - Analyze Meal Photo Edge Function
-// Requires GEMINI_API_KEY secret set in Supabase
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { GoogleGenerativeAI } from "npm:@google/generative-ai@0.21.0";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
 
-Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -60,13 +57,7 @@ Rispondi SOLO con un JSON valido con questa struttura esatta:
     "total_calories": 250,
     "description": "Breve descrizione del pasto"
   }
-}
-
-IMPORTANTE:
-- I nomi devono essere in italiano
-- Le stime devono essere realistiche
-- Se non sei sicuro di un alimento, usa confidence < 0.5
-- Non inventare alimenti che non vedi chiaramente`;
+}`;
 
     const imagePart = {
       inlineData: {

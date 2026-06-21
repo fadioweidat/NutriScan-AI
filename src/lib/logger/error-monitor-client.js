@@ -1,5 +1,6 @@
 import clientLogger from './client-logger.js';
 import { sanitize } from './log-sanitizer.js';
+import { ReleaseConfig } from './monitoring-integration.js';
 
 /**
  * Client-Side Error Monitor (Phase 9/10)
@@ -57,7 +58,13 @@ class ErrorMonitorClient {
       response: sanitizedContext.responsePayload ? { data: sanitizedContext.responsePayload } : undefined,
       breadcrumbs: sanitizedContext.breadcrumbs ? sanitize(sanitizedContext.breadcrumbs) : [],
       user: sanitizedContext.user ? { id: sanitizedContext.user.id } : null,
-      tags: { moduleName: context.moduleName || 'CLIENT' }
+      tags: { 
+        moduleName: context.moduleName || 'CLIENT',
+        version: ReleaseConfig.version,
+        commit: ReleaseConfig.commitHash,
+        buildDate: ReleaseConfig.buildDate,
+        environment: ReleaseConfig.environment
+      }
     };
 
     console.log(`[Sentry Report] Event dispatched securely:`, sentryEvent);

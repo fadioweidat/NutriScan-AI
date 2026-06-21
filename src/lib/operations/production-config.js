@@ -35,7 +35,10 @@ export const ProductionConfig = {
     hsts: "max-age=63072000; includeSubDomains; preload",
     xFrameOptions: "DENY",
     xContentTypeOptions: "nosniff",
-    referrerPolicy: "strict-origin-when-cross-origin"
+    referrerPolicy: "strict-origin-when-cross-origin",
+    secureCookies: true,
+    httpsOnly: true,
+    cookiePolicy: "Secure; SameSite=Strict; HttpOnly"
   },
 
   // Caching configuration

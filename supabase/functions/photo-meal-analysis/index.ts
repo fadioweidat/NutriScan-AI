@@ -1,28 +1,79 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.21.0";
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { getAuthoritativeUserTier, SUBSCRIPTION_TIERS } from "../_shared/subscription.ts";
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { image } = await req.json();
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
+        status: 401,
+        headers: corsHeaders,
+      });
+    }
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized user' }), {
+        status: 401,
+        headers: corsHeaders,
+      });
+    }
+
+    const { image } = await req.json();
     if (!image) {
       return new Response(JSON.stringify({ error: 'Nessuna immagine fornita' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: corsHeaders,
       });
     }
 
     const openAiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAiApiKey) {
       throw new Error('OPENAI_API_KEY non configurata nei secrets Supabase');
+    }
+
+    // Server-Side Subscription Verification & Limit checks
+    const userTier = await getAuthoritativeUserTier(user);
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false },
+    });
+
+    if (userTier === SUBSCRIPTION_TIERS.FREE) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const { count, error: countError } = await adminClient
+        .from('meal_entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('entry_date', todayStr);
+
+      if (countError) {
+        throw new Error(`Errore verifica limiti: ${countError.message}`);
+      }
+
+      if (count && count >= 3) {
+        return new Response(JSON.stringify({ 
+          error: "Limite di 3 analisi pasti giornaliere per il piano Free superato. Esegui l'upgrade per sbloccare analisi illimitate." 
+        }), {
+          status: 403,
+          headers: corsHeaders,
+        });
+      }
     }
 
     const payload = {
@@ -76,7 +127,6 @@ Se non riesci a identificare alcun alimento, restituisci un array vuoto: [].`
     const data = await response.json();
     let content = data.choices[0].message.content.trim();
     
-    // Rimuovi eventuali blocchi markdown se OpenAI li ha ignorati
     if (content.startsWith('```json')) {
       content = content.replace(/^```json/, '').replace(/```$/, '').trim();
     } else if (content.startsWith('```')) {

@@ -95,7 +95,8 @@ const SENSITIVE_KEYS = new Set([
   'meals', 'pasti', 'conditions', 'patologie', 'allergie', 'intolerances', 'intolleranze',
   'sleep_logs', 'stress_logs', 'hydration_logs', 'activity_logs', 'blood_test_reports', 'meal_entries',
   'jwt', 'cookie', 'authorization', 'bearer', 'token', 'password', 'apikey', 'key', 'secret',
-  'openai_api_key', 'supabase_service_role_key', 'service_role_key'
+  'openai_api_key', 'supabase_service_role_key', 'service_role_key',
+  'diagnosi', 'diagnosis', 'ocr', 'allegati', 'attachments', 'attachment', 'allegato'
 ]);
 
 function sanitizeString(str) {
