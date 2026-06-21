@@ -39,6 +39,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
+  // Ignore requests that are not http/https (e.g. browser extensions)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return;
+  }
+
   // CRITICAL SECURITY CONSTRAINT: Exclude all Supabase API requests, auth/JWT endpoints, and analytical requests
   // Must maintain the exact string 'isSupabaseRequest' to satisfy verify-production.js test checks.
   const isSupabaseRequest = url.hostname.includes('supabase.co') || 

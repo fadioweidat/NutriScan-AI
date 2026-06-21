@@ -191,7 +191,10 @@ try {
     conditions: ['Ipertensione', 'Anemia']
   };
 
+  const oldRandom = Math.random;
+  Math.random = () => 0;
   const plan = mealPlannerEngine.generateWeeklyMealPlan(userMed, 2000);
+  Math.random = oldRandom;
   assert(plan.length === 7, "Generato piano Mediterraneo settimanale (7 giorni)");
 
   // Verify average balance

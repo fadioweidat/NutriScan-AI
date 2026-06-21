@@ -7,6 +7,7 @@ import { generateWeeklyMealPlan } from '../lib/engines/meal-planner-engine';
 import { getRecipeAlternatives } from '../lib/engines/food-substitution-engine';
 import { generateShoppingList } from '../lib/engines/shopping-list-engine';
 import { evaluateWeeklyBalance } from '../lib/engines/weekly-balance-engine';
+import recipeEngine from '../lib/engines/recipe-engine.js';
 import { 
   Calendar, Utensils, Printer, RotateCw, RefreshCw, Eye, CheckCircle2, 
   ListTodo, Info, Heart, ArrowRight, Loader2, Sparkles, ChevronDown 
