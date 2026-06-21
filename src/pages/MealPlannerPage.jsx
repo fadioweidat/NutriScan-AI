@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { getHealthCoachContext } from '../lib/engines/health-coach-engine';
+import SubscriptionManager from '../lib/operations/subscription-manager.js';
 import { generateWeeklyMealPlan } from '../lib/engines/meal-planner-engine';
 import { getRecipeAlternatives } from '../lib/engines/food-substitution-engine';
 import { generateShoppingList } from '../lib/engines/shopping-list-engine';
@@ -356,6 +357,9 @@ export default function MealPlannerPage() {
     );
   }
 
+  const tier = SubscriptionManager.getUserTier(user);
+  const visibleDays = tier === 'free' ? planDays.slice(0, 1) : planDays;
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
       
@@ -435,7 +439,7 @@ export default function MealPlannerPage() {
             </h2>
             
             <div className="space-y-4">
-              {planDays.map((day, dIdx) => (
+              {visibleDays.map((day, dIdx) => (
                 <div key={dIdx} className="glass-card-static p-5 space-y-4 relative">
                   {/* Day Header */}
                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
@@ -491,6 +495,19 @@ export default function MealPlannerPage() {
                   </div>
                 </div>
               ))}
+
+              {tier === 'free' && (
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-5 text-center relative overflow-hidden flex flex-col items-center justify-center py-8">
+                  <div className="absolute inset-0 bg-[#0a0a0f]/40 backdrop-blur-[1px] z-10" />
+                  <div className="relative z-20 space-y-3 max-w-sm">
+                    <Calendar className="w-8 h-8 text-lime-400 mx-auto" />
+                    <h4 className="text-white font-bold text-xs">Visualizzazione Completa Bloccata</h4>
+                    <p className="text-[10px] text-slate-400">
+                      Il piano Free mostra solo il primo giorno del menu. Effettua l'upgrade a Pro per sbloccare l'intero piano settimanale di 7 giorni.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import engine from '../lib/nutrition-engine';
+import SubscriptionManager from '../lib/operations/subscription-manager.js';
 
 import NutritionalScoreCard from '../components/dashboard/NutritionalScoreCard';
 import NutritionalPriorities from '../components/dashboard/NutritionalPriorities';
@@ -544,14 +545,32 @@ export default function DashboardPage() {
       )}
 
       {/* Phase 6: AI Health Twin Premium Widget */}
-      {digitalTwin && (
-        <AiHealthTwinCard 
-          digitalTwin={digitalTwin}
-          predictiveTrends={predictiveTrends}
-          deficiencies={deficiencies}
-          warnings={warnings}
-          currentScore={digitalTwin.healthScore || coachContext?.healthScore || dailyTotals?.healthScore || 70}
-        />
+      {!SubscriptionManager.canUseDigitalTwin(SubscriptionManager.getUserTier(user)) ? (
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden flex flex-col items-center justify-center text-center py-12">
+          <div className="absolute inset-0 bg-[#0a0a0f]/40 backdrop-blur-[2px] z-10" />
+          <div className="relative z-20 max-w-md space-y-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30">
+              <BrainCircuit className="w-6 h-6 text-cyan-400" />
+            </div>
+            <h3 className="text-white font-bold text-base">Digital Twin Simulator & Forecast</h3>
+            <p className="text-xs text-slate-400">
+              Crea il tuo gemello digitale in tempo reale, proietta i tuoi biomarcatori a 60 giorni e simula modifiche al tuo stile di vita.
+            </p>
+            <span className="inline-block bg-cyan-500/20 text-cyan-400 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+              Richiede Piano Premium
+            </span>
+          </div>
+        </div>
+      ) : (
+        digitalTwin && (
+          <AiHealthTwinCard 
+            digitalTwin={digitalTwin}
+            predictiveTrends={predictiveTrends}
+            deficiencies={deficiencies}
+            warnings={warnings}
+            currentScore={digitalTwin.healthScore || coachContext?.healthScore || dailyTotals?.healthScore || 70}
+          />
+        )
       )}
 
       {/* AI Health Summary Widget */}
@@ -568,14 +587,33 @@ export default function DashboardPage() {
           <Activity className="w-5 h-5 text-cyan-400" /> Ecosystem & Wearables
         </h2>
         
-        <WearablesCard supabase={supabase} onSyncComplete={loadDashboardData} />
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <RecoveryCard metrics={recoveryMetrics} />
-          <ActivityInsights analysis={activityAnalysis} />
-          <HeartSummary analysis={heartAnalysis} />
-          <WeightTrendCard analysis={weightAnalysis} trend={weightTrend} />
-        </div>
+        {!SubscriptionManager.canSyncWearables(SubscriptionManager.getUserTier(user)) ? (
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden flex flex-col items-center justify-center text-center py-12">
+            <div className="absolute inset-0 bg-[#0a0a0f]/40 backdrop-blur-[2px] z-10" />
+            <div className="relative z-20 max-w-md space-y-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-lime-500/10 border border-lime-500/30">
+                <Activity className="w-6 h-6 text-lime-400" />
+              </div>
+              <h3 className="text-white font-bold text-base">Collegamento Dispositivi Indossabili</h3>
+              <p className="text-xs text-slate-400">
+                Sincronizza sonno, passi, battito cardiaco e HRV da Fitbit, Google Fit o Apple Health per un calcolo dinamico del punteggio di recupero.
+              </p>
+              <span className="inline-block bg-lime-500/20 text-lime-400 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                Richiede Piano Pro
+              </span>
+            </div>
+          </div>
+        ) : (
+          <>
+            <WearablesCard supabase={supabase} onSyncComplete={loadDashboardData} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <RecoveryCard metrics={recoveryMetrics} />
+              <ActivityInsights analysis={activityAnalysis} />
+              <HeartSummary analysis={heartAnalysis} />
+              <WeightTrendCard analysis={weightAnalysis} trend={weightTrend} />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Weekly Meal Plan Preview */}

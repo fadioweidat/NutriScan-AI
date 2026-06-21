@@ -1,7 +1,8 @@
 import clientLogger from './client-logger.js';
+import { sanitize } from './log-sanitizer.js';
 
 /**
- * Client-Side Error Monitor (Phase 9)
+ * Client-Side Error Monitor (Phase 9/10)
  * Intercepts React errors, PWA issues, Network failures, and offline database events.
  * Executes retry flows with exponential backoff.
  */
@@ -36,6 +37,33 @@ class ErrorMonitorClient {
     });
   }
 
+  // Simulated Sentry Reporting Integration with strict privacy scrubbing
+  sendToSentry(error, context = {}) {
+    const sanitizedErrorMsg = sanitize(error?.message || 'Unknown Error');
+    const sanitizedStack = sanitize(error?.stack || '');
+    const sanitizedContext = sanitize(context);
+
+    // Mock sentry event creation (mimics Sentry.beforeSend callback)
+    const sentryEvent = {
+      message: sanitizedErrorMsg,
+      exception: {
+        values: [{
+          type: error?.name || 'Error',
+          value: sanitizedErrorMsg,
+          stacktrace: { frames: sanitizedStack.split('\n') }
+        }]
+      },
+      request: sanitizedContext.requestPayload ? { data: sanitizedContext.requestPayload } : undefined,
+      response: sanitizedContext.responsePayload ? { data: sanitizedContext.responsePayload } : undefined,
+      breadcrumbs: sanitizedContext.breadcrumbs ? sanitize(sanitizedContext.breadcrumbs) : [],
+      user: sanitizedContext.user ? { id: sanitizedContext.user.id } : null,
+      tags: { moduleName: context.moduleName || 'CLIENT' }
+    };
+
+    console.log(`[Sentry Report] Event dispatched securely:`, sentryEvent);
+    return sentryEvent;
+  }
+
   handleError(error, moduleName = 'CLIENT', context = {}) {
     this.errorCount++;
     const errMsg = error ? error.message : 'Unknown Error';
@@ -46,6 +74,9 @@ class ErrorMonitorClient {
       stack: errStack,
       ...context
     });
+
+    // Send to simulated Sentry after sanitizing
+    this.sendToSentry(error, { moduleName, ...context });
 
     return {
       errorId: Math.random().toString(36).substring(2, 10),

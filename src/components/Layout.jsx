@@ -36,7 +36,7 @@ const NAV_ITEMS = [
 ];
 
 export default function Layout({ children }) {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
@@ -50,6 +50,8 @@ export default function Layout({ children }) {
     document.body.style.overflow = sidebarOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [sidebarOpen]);
+
+  const tier = user?.user_metadata?.subscription_tier || 'free';
 
   return (
     <div className="flex min-h-dvh bg-[#0a0a0f]">
@@ -118,8 +120,17 @@ export default function Layout({ children }) {
               <User className="w-4 h-4 text-accent" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-200 truncate">{profile?.full_name || 'Utente'}</p>
-              <p className="text-[11px] text-slate-500 truncate">Account attivo</p>
+              <p className="text-sm font-medium text-slate-200 truncate flex items-center gap-1.5">
+                {profile?.full_name || 'Utente'}
+                {tier !== 'free' && (
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                    tier === 'premium' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-lime-500/20 text-lime-400'
+                  }`}>
+                    {tier.toUpperCase()}
+                  </span>
+                )}
+              </p>
+              <p className="text-[11px] text-slate-500 truncate">Account {tier === 'free' ? 'Base' : 'SaaS ' + tier.toUpperCase()}</p>
             </div>
             <button
               onClick={() => signOut()}

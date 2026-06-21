@@ -7,6 +7,8 @@ import { requestNotificationPermission, scheduleHydrationReminder, scheduleMealR
 
 // Lazy loaded pages
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const AddMealPage = lazy(() => import('./pages/AddMealPage'));
 const DailyDiaryPage = lazy(() => import('./pages/DailyDiaryPage'));
@@ -21,7 +23,7 @@ const LifestylePage = lazy(() => import('./pages/LifestylePage'));
 const BloodTestsPage = lazy(() => import('./pages/BloodTestsPage'));
 const MealPlannerPage = lazy(() => import('./pages/MealPlannerPage'));
 
-// Protected route wrapper — redirects to /login if not authenticated
+// Protected route wrapper — redirects to /landing if not authenticated
 function ProtectedRoute() {
   const { user, loading } = useAuth();
 
@@ -34,7 +36,7 @@ function ProtectedRoute() {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/landing" replace />;
   }
 
   return (
@@ -95,6 +97,8 @@ export default function App() {
           {/* Public routes */}
           <Route element={<PublicRoute />}>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/landing" element={<LandingPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
           </Route>
 
           {/* Protected routes */}

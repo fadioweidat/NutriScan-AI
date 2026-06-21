@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import engine from '../lib/nutrition-engine';
+import SubscriptionManager from '../lib/operations/subscription-manager.js';
 import healthEngine from '../lib/health-engine';
 import lifestyleEngine from '../lib/lifestyle-engine';
 import medicalKnowledgeEngine from '../lib/engines/medical-knowledge-engine';
@@ -413,6 +414,18 @@ export default function AiChatPage() {
 
   const handleSend = async (text = input) => {
     if (!text.trim() || loading) return;
+
+    const tier = SubscriptionManager.getUserTier(user);
+    const userMessagesCount = messages.filter(m => m.role === 'user').length;
+    if (tier === 'free' && userMessagesCount >= 5) {
+      setMessages(prev => [
+        ...prev,
+        { role: 'user', content: text },
+        { role: 'assistant', content: "Hai esaurito i 5 messaggi giornalieri del piano Free. Esegui l'upgrade a Pro per avere messaggi illimitati con il tuo AI Health Coach." }
+      ]);
+      setInput('');
+      return;
+    }
 
     const newMessages = [...messages, { role: 'user', content: text }];
     setMessages(newMessages);

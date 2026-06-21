@@ -87,6 +87,7 @@ const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const PHONE_REGEX = /\b(?:\+?\d{1,3}[- ]?)?\(?\d{3}\)?[- ]?\d{3}[- ]?\d{4}\b/g;
 const JWT_REGEX = /\bey[jJ][a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+\b/g;
 const BEARER_REGEX = /bearer\s+[a-zA-Z0-9-_.]+/gi;
+const CLINICAL_WORDS_REGEX = /\b(metformin|aspirin|aspirina|cardioaspirina|ibuprofen|insulin|insulina|glicemia|colesterolo|glucose|cholesterol|paracetamolo|paracetamol|lisinopril|atorvastatin|levothyroxine|metoprolol)\b/gi;
 
 const SENSITIVE_KEYS = new Set([
   'email', 'phone', 'telefono', 'name', 'surname', 'nome', 'cognome',
@@ -104,6 +105,7 @@ function sanitizeString(str) {
   cleaned = cleaned.replace(PHONE_REGEX, '[PHONE_SCRUBBED]');
   cleaned = cleaned.replace(JWT_REGEX, '[JWT_SCRUBBED]');
   cleaned = cleaned.replace(BEARER_REGEX, '[AUTH_SCRUBBED]');
+  cleaned = cleaned.replace(CLINICAL_WORDS_REGEX, '[HEALTH_DATA_SCRUBBED]');
   return cleaned;
 }
 

@@ -4,6 +4,8 @@ import {
   User, Calendar, Weight, Ruler, Target, Activity,
   Save, Loader2, Check, Calculator
 } from 'lucide-react';
+import BillingSettings from '../components/BillingSettings.jsx';
+import AdminConsoleCard from '../components/AdminConsoleCard.jsx';
 
 const GOALS = [
   { value: 'lose_weight', label: 'Perdere peso' },
@@ -69,6 +71,7 @@ export default function ProfilePage() {
   const [activityLevel, setActivityLevel] = useState('moderate');
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isAdminActive, setIsAdminActive] = useState(false);
 
   // Load existing profile data
   useEffect(() => {
@@ -363,6 +366,27 @@ export default function ProfilePage() {
           </>
         )}
       </button>
+
+      {/* Billing & SaaS Subscriptions (Phase 10) */}
+      <div className="pt-6 border-t border-white/5 space-y-3">
+        <h3 className="text-white font-bold text-base ml-1">Fatturazione & Piani SaaS</h3>
+        <BillingSettings />
+      </div>
+
+      {/* Admin Telemetry Panel (Phase 10) */}
+      <div className="pt-6 border-t border-white/5 space-y-4">
+        <div className="flex items-center justify-between ml-1">
+          <h3 className="text-white font-bold text-base">Amministrazione Piattaforma</h3>
+          <button
+            onClick={() => setIsAdminActive(!isAdminActive)}
+            className="text-xs font-semibold text-lime-400 hover:text-lime-300 bg-lime-500/10 px-3 py-1.5 rounded-lg border border-lime-500/20 transition-all"
+            id="admin-console-toggle"
+          >
+            {isAdminActive ? 'Nascondi Console' : 'Mostra Console Admin'}
+          </button>
+        </div>
+        {isAdminActive && <AdminConsoleCard />}
+      </div>
     </div>
   );
 }

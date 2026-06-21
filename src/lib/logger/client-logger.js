@@ -8,7 +8,7 @@ import { sanitize } from './log-sanitizer.js';
 
 const IS_DEV = (typeof import.meta !== 'undefined' && import.meta.env) 
   ? import.meta.env.DEV 
-  : (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production');
+  : (typeof globalThis !== 'undefined' && globalThis.process !== 'undefined' && globalThis.process.env?.NODE_ENV !== 'production');
 
 class ClientLogger {
   constructor() {

@@ -93,12 +93,25 @@ export const AuthProvider = ({ children }) => {
     return await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } }
+      options: { 
+        data: { full_name: fullName },
+        emailRedirectTo: `${window.location.origin}/login`
+      }
     });
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
+  };
+
+  const resetPasswordForEmail = async (email) => {
+    return await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`
+    });
+  };
+
+  const updateUserPassword = async (newPassword) => {
+    return await supabase.auth.updateUser({ password: newPassword });
   };
 
   const updateProfile = async (updates) => {
@@ -113,7 +126,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut, updateProfile }}>
+    <AuthContext.Provider value={{ 
+      user, profile, loading, signIn, signUp, signOut, 
+      resetPasswordForEmail, updateUserPassword, updateProfile 
+    }}>
       {children}
     </AuthContext.Provider>
   );

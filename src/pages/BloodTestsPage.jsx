@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import healthEngine from '../lib/health-engine';
 import lifestyleEngine from '../lib/lifestyle-engine';
 import medicalKnowledgeEngine from '../lib/engines/medical-knowledge-engine';
+import SubscriptionManager from '../lib/operations/subscription-manager.js';
 import { 
   FileText, Upload, Calendar, AlertCircle, CheckCircle, Info, TrendingUp, 
   Droplet, ShieldAlert, Loader2, ArrowRight, Activity, Clock
@@ -144,6 +145,12 @@ export default function BloodTestsPage() {
   // Upload report handler
   const handleFileUpload = async (file) => {
     if (!file) return;
+
+    const tier = SubscriptionManager.getUserTier(user);
+    if (tier === 'free' && reports.length >= 3) {
+      setErrorMessage("Limite di 3 caricamenti referti raggiunto per il piano Free. Esegui l'upgrade a Pro per caricamenti illimitati.");
+      return;
+    }
     
     // Validation
     const isPdf = file.type === 'application/pdf';
