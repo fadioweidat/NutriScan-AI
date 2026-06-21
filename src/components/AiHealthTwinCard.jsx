@@ -55,7 +55,7 @@ export default function AiHealthTwinCard({
   };
 
   return (
-    <div className="glass-card p-6 relative overflow-hidden space-y-6">
+    <div className="glass-card p-6 relative overflow-hidden space-y-6" role="region" aria-label="Gemello Digitale della Salute">
       {/* Premium background glows */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl" />
       <div className="absolute bottom-0 left-0 w-64 h-64 bg-lime-500/5 rounded-full blur-3xl" />
@@ -146,6 +146,7 @@ export default function AiHealthTwinCard({
                       onClick={() => openExplanation('deficiency', def)}
                       className="p-1 rounded-lg text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
                       title="Spiegazione AI"
+                      aria-label={`Spiegazione carenza ${def.nutrient}`}
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
                     </button>
@@ -179,6 +180,7 @@ export default function AiHealthTwinCard({
                       onClick={() => openExplanation('warning', w)}
                       className="p-1 rounded-lg text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
                       title="Perché?"
+                      aria-label={`Dettagli avviso ${w.title}`}
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
                     </button>
@@ -224,6 +226,7 @@ export default function AiHealthTwinCard({
               value={sleepDelta} 
               onChange={e => setSleepDelta(Number(e.target.value))}
               className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-lime-400"
+              aria-label="Simulatore ore di sonno extra"
             />
           </div>
 
@@ -238,6 +241,7 @@ export default function AiHealthTwinCard({
               value={waterDelta} 
               onChange={e => setWaterDelta(Number(e.target.value))}
               className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-lime-400"
+              aria-label="Simulatore idratazione extra"
             />
           </div>
 
@@ -252,6 +256,7 @@ export default function AiHealthTwinCard({
               value={activityDelta} 
               onChange={e => setActivityDelta(Number(e.target.value))}
               className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-lime-400"
+              aria-label="Simulatore attività fisica extra"
             />
           </div>
 
@@ -266,6 +271,7 @@ export default function AiHealthTwinCard({
               value={sugarDelta} 
               onChange={e => setSugarDelta(Number(e.target.value))}
               className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-lime-400"
+              aria-label="Simulatore taglio zuccheri"
             />
           </div>
 
@@ -280,6 +286,7 @@ export default function AiHealthTwinCard({
               value={weightDelta} 
               onChange={e => setWeightDelta(Number(e.target.value))}
               className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-lime-400"
+              aria-label="Simulatore calo peso ipotetico"
             />
           </div>
         </div>
