@@ -8,10 +8,31 @@ import {
   Tooltip, 
   CartesianGrid 
 } from 'recharts';
-import { Calendar, BarChart2, Activity, Moon, Droplet, Smile } from 'lucide-react';
+import { 
+  BarChart2, 
+  Activity, 
+  Moon, 
+  Droplet, 
+  Smile, 
+  Scale, 
+  Dumbbell, 
+  Utensils, 
+  Pill, 
+  Stethoscope 
+} from 'lucide-react';
 
 export default function HealthTimeline({ historyLogs = [] }) {
   const [timeframe, setTimeframe] = useState(30); // 7 | 30 | 90 | 180 | 365
+  const [activeMetric, setActiveMetric] = useState('healthScore'); // healthScore | sleepHours | stressLevel | waterMl | activeMinutes | weightKg
+
+  const metricsConfig = {
+    healthScore: { label: 'Health Score', color: '#84cc16', icon: <Activity className="w-3.5 h-3.5" />, domain: [0, 100], unit: '' },
+    sleepHours: { label: 'Sonno', color: '#6366f1', icon: <Moon className="w-3.5 h-3.5" />, domain: [0, 12], unit: ' ore' },
+    stressLevel: { label: 'Stress', color: '#f59e0b', icon: <Smile className="w-3.5 h-3.5" />, domain: [0, 10], unit: ' / 10' },
+    waterMl: { label: 'Idratazione', color: '#06b6d4', icon: <Droplet className="w-3.5 h-3.5" />, domain: [0, 3000], unit: ' ml' },
+    activeMinutes: { label: 'Attività', color: '#10b981', icon: <Dumbbell className="w-3.5 h-3.5" />, domain: [0, 120], unit: ' min' },
+    weightKg: { label: 'Peso', color: '#ec4899', icon: <Scale className="w-3.5 h-3.5" />, domain: [40, 150], unit: ' kg' }
+  };
 
   // Filter and sort logs based on timeframe
   const filteredData = useMemo(() => {
@@ -29,40 +50,67 @@ export default function HealthTimeline({ historyLogs = [] }) {
     }
   };
 
-  // Custom Tooltip component
+  // Custom Tooltip component showing multi-dimensional daily details
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const currentVal = data[activeMetric] !== undefined ? data[activeMetric] : 'N/D';
+      const config = metricsConfig[activeMetric];
+
       return (
-        <div className="bg-surface/90 border border-white/[0.08] backdrop-blur-xl p-3.5 rounded-2xl shadow-2xl space-y-2">
+        <div className="bg-surface/90 border border-white/[0.08] backdrop-blur-xl p-3.5 rounded-2xl shadow-2xl space-y-2.5 max-w-xs text-xs">
           <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
             {new Date(data.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-xs text-slate-400 flex items-center gap-1">
-                <Activity className="w-3.5 h-3.5 text-lime-400" /> Health Score:
-              </span>
-              <span className="text-xs font-bold text-white">{data.healthScore}</span>
+          
+          <div className="flex items-center justify-between border-b border-white/[0.04] pb-2">
+            <span className="text-slate-400 font-medium">Valore selezionato:</span>
+            <span className="font-extrabold text-white flex items-center gap-1">
+              {config.icon}
+              {currentVal}{config.unit}
+            </span>
+          </div>
+
+          {/* Details list */}
+          <div className="space-y-1.5 pt-0.5">
+            {/* Meals */}
+            <div className="flex items-start gap-1.5">
+              <Utensils className="w-3.5 h-3.5 text-lime-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="text-slate-400 font-semibold">Pasti: </span>
+                <span className="text-slate-300">
+                  {data.meals && data.meals.length > 0 
+                    ? data.meals.map(m => m.name || m.alimento).slice(0, 2).join(', ') + (data.meals.length > 2 ? '...' : '')
+                    : 'Nessun pasto loggato'}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-xs text-slate-400 flex items-center gap-1">
-                <Moon className="w-3.5 h-3.5 text-indigo-400" /> Sonno:
-              </span>
-              <span className="text-xs font-bold text-white">{data.sleepHours} ore</span>
+
+            {/* Medications / Supplements */}
+            <div className="flex items-start gap-1.5">
+              <Pill className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="text-slate-400 font-semibold">Farmaci/Integratori: </span>
+                <span className="text-slate-300">
+                  {data.medications && data.medications.length > 0 
+                    ? data.medications.slice(0, 2).join(', ')
+                    : 'Nessuno attivo'}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-xs text-slate-400 flex items-center gap-1">
-                <Smile className="w-3.5 h-3.5 text-amber-400" /> Stress:
-              </span>
-              <span className="text-xs font-bold text-white">{data.stressLevel} / 10</span>
-            </div>
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-xs text-slate-400 flex items-center gap-1">
-                <Droplet className="w-3.5 h-3.5 text-cyan-400" /> Acqua:
-              </span>
-              <span className="text-xs font-bold text-white">{data.waterMl} ml</span>
-            </div>
+
+            {/* Biomarkers */}
+            {data.biomarkers && data.biomarkers.length > 0 && (
+              <div className="flex items-start gap-1.5 border-t border-white/[0.04] pt-1.5">
+                <Stethoscope className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-slate-400 font-semibold">Biomarcatori: </span>
+                  <span className="text-cyan-400 font-bold">
+                    {data.biomarkers.map(b => `${b.biomarker_name}: ${b.value} ${b.unit}`).join(', ')}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -70,8 +118,10 @@ export default function HealthTimeline({ historyLogs = [] }) {
     return null;
   };
 
+  const activeConfig = metricsConfig[activeMetric];
+
   return (
-    <div className="glass-card p-6 space-y-6">
+    <div className="glass-card p-6 space-y-6" role="region" aria-label="Analisi Storica Longitudinale">
       {/* Header & Filter buttons */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
         <div className="flex items-center gap-3">
@@ -80,9 +130,9 @@ export default function HealthTimeline({ historyLogs = [] }) {
           </div>
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-1.5">
-              Analisi Longitudinale
+              Analisi Longitudinale 2.0
             </h2>
-            <p className="text-xs text-slate-400">Tracciamento storico e trend dei parametri di salute</p>
+            <p className="text-xs text-slate-400">Monitoraggio dei parametri di salute, pasti ed esami nel tempo</p>
           </div>
         </div>
 
@@ -110,10 +160,30 @@ export default function HealthTimeline({ historyLogs = [] }) {
         </div>
       </div>
 
-      {/* Health Score Area Chart */}
+      {/* Metric Selector Tabs */}
+      <div className="flex flex-wrap items-center gap-2">
+        {Object.entries(metricsConfig).map(([key, config]) => (
+          <button
+            key={key}
+            onClick={() => setActiveMetric(key)}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeMetric === key
+                ? 'bg-white/10 border-white/20 text-white shadow-xl shadow-white/[0.02]'
+                : 'bg-white/[0.01] border-white/[0.03] text-slate-400 hover:text-slate-200'
+            }`}
+            aria-label={`Visualizza andamento di ${config.label}`}
+          >
+            {config.icon}
+            {config.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Main Area Chart */}
       <div className="space-y-2">
         <span className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
-          <Activity className="w-4 h-4 text-lime-400" /> Andamento Health Score Quotidiano
+          {activeConfig.icon}
+          Andamento {activeConfig.label} ({timeframe} giorni)
         </span>
         <div className="h-[250px] w-full bg-white/[0.01] rounded-2xl border border-white/[0.02] p-4">
           {filteredData.length === 0 ? (
@@ -124,9 +194,9 @@ export default function HealthTimeline({ historyLogs = [] }) {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={filteredData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="colorHealthScore" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#84cc16" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#84cc16" stopOpacity={0.0}/>
+                  <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={activeConfig.color} stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor={activeConfig.color} stopOpacity={0.0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
@@ -137,18 +207,18 @@ export default function HealthTimeline({ historyLogs = [] }) {
                   style={{ fontSize: '10px' }}
                 />
                 <YAxis 
-                  domain={[0, 100]} 
+                  domain={activeConfig.domain} 
                   stroke="rgba(255,255,255,0.2)" 
                   style={{ fontSize: '10px' }}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Area 
                   type="monotone" 
-                  dataKey="healthScore" 
-                  stroke="#84cc16" 
+                  dataKey={activeMetric} 
+                  stroke={activeConfig.color} 
                   strokeWidth={2.5}
                   fillOpacity={1} 
-                  fill="url(#colorHealthScore)" 
+                  fill="url(#colorMetric)" 
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -156,7 +226,7 @@ export default function HealthTimeline({ historyLogs = [] }) {
         </div>
       </div>
 
-      {/* Sparklines / Lifestyle Parameter Overview Grid */}
+      {/* Averages Summary Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Sonno Medio', key: 'sleepHours', unit: 'h', color: 'text-indigo-400' },

@@ -41,6 +41,13 @@ This document outlines the development roadmap of NutriScan AI, covering complet
 * Audited math equations, accessibility tags, security bounds, and performance benchmarks.
 * Cleared all linter warnings and generated clean production build bundles.
 
+### Phase 8: Health Ecosystem & Wearables
+* Unified connection and sync manager supporting Apple Health, Google Health Connect, Google Fit, Fitbit, Garmin, Oura, Withings, and Samsung Health.
+* Engineered 4 wellness analysis engines: Recovery, Activity, Heart, and Weight.
+* Created 5 new UI dashboard widgets and integrated them in the main dashboard.
+* Extended the Recharts timeline to support multi-metric selectors.
+* Hardened wearable credentials with private server-side metadata encryption.
+
 ---
 
 ## 2. Future Evolutions
@@ -48,13 +55,13 @@ This document outlines the development roadmap of NutriScan AI, covering complet
 ```mermaid
 timeline
     title Future Technology & Clinical Roadmap
-    Short-Term (Q3 2026) : Device Sensor Integration (HealthKit/Google Fit) : Micro-nutrients Auto-Logging
+    Short-Term (Q3 2026) : Micro-nutrients Auto-Logging : Continuous Glucose Monitors (CGM) Direct Alerts
     Medium-Term (Q4 2026) : Offline On-Device LLM (WebNN/Transformers.js) : Interoperability (HL7 FHIR Document Import)
     Long-Term (Q2 2027) : Clinical Pilot Validation Studies : Doctor Dashboard & Report Sharing Portal
 ```
 
 ### Short-Term (Q3 2026)
-* **Sensor Integrations (HealthKit & Google Fit)**: Connect directly to wearable smartwatches to automatically sync daily sleep duration, heart rate variability, and active workout minutes, replacing manual lifestyle logs.
+* **Continuous Glucose Monitors (CGM) Direct Alerts**: Integrate real-time interstitial glucose telemetry alerts (e.g. Dexcom/Abbott API) to proactively warn diabetic/prediabetic users of postprandial blood sugar spikes.
 * **Micro-nutrients Auto-Logging**: Enhance recipe analysis to automatically calculate vitamins (A, C, D, B-group) and minerals (Iron, Calcium, Magnesium) from meal descriptions, improving deficiency prediction baselines.
 
 ### Medium-Term (Q4 2026)

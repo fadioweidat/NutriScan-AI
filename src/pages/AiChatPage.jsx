@@ -12,6 +12,14 @@ import { computePredictiveTrends } from '../lib/engines/predictive-health-engine
 import { forecastBiomarkers } from '../lib/engines/forecast-engine';
 import { runSimulation } from '../lib/engines/simulation-engine';
 import dailyScoreEngine from '../lib/engines/daily-score-engine';
+
+// Phase 8 Imports
+import manager from '../lib/connectors/health-provider-manager';
+import { calculateRecoveryMetrics } from '../lib/engines/recovery-engine';
+import { analyzeActivity } from '../lib/engines/activity-intelligence-engine';
+import { analyzeHeartMetrics } from '../lib/engines/heart-intelligence-engine';
+import { analyzeWeightMetrics } from '../lib/engines/weight-intelligence-engine';
+
 import { Send, Bot, User, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
 
 const QUICK_PROMPTS = [
@@ -141,6 +149,21 @@ export default function AiChatPage() {
 
       setHasMeals(true);
 
+      // Check and sync connected wearables on load
+      const connectedProviders = await manager.getConnectedProviders(supabase).catch(() => []);
+      let aggregatedWearableData = [];
+      for (const providerId of connectedProviders) {
+        try {
+          const pData = await manager.syncMetrics(supabase, providerId, 90);
+          aggregatedWearableData = [...aggregatedWearableData, ...pData];
+        } catch (e) {
+          console.error(`Errore caricamento wearable ${providerId} in chat:`, e);
+        }
+      }
+      const finalWearableData = aggregatedWearableData.length > 0
+        ? manager.deduplicateAndMapMetrics(aggregatedWearableData)
+        : [];
+
       const sleepLogs = sleepLogsRes.data || [];
       const stressLogs = stressLogsRes.data || [];
       const hydrationLogs = hydrationLogsRes.data || [];
@@ -210,14 +233,26 @@ export default function AiChatPage() {
         const dayHydration = hydrationLogs.find(l => l.entry_date === dateStr);
         const dayActivities = activityLogs.filter(l => l.entry_date === dateStr);
 
+        const matchingWearable = finalWearableData.find(w => w.date === dateStr);
+
+        const sleepHours = daySleep 
+          ? Number(daySleep.duration_hours || 0) 
+          : (matchingWearable ? matchingWearable.sleepHours : 0);
+        const sleepQuality = daySleep 
+          ? Number(daySleep.quality_score || 0) 
+          : (matchingWearable ? matchingWearable.sleepQuality : 0);
+        const activeMinutes = dayActivities.reduce((sum, act) => sum + Number(act.duration_minutes || 0), 0)
+          || (matchingWearable ? matchingWearable.activeMinutes : 0);
+        const weightKg = matchingWearable?.weightKg || profile?.weight_kg || 75;
+
         const healthScore = dailyScoreEngine.calculateDailyHealthScore({
           totals: dayTotals,
           dietType,
           meals: dayMeals,
-          sleepLog: daySleep,
+          sleepLog: daySleep || (matchingWearable ? { duration_hours: sleepHours, quality_score: sleepQuality } : null),
           stressLog: dayStress,
           hydrationLog: dayHydration,
-          activityLogs: dayActivities,
+          activityLogs: dayActivities.length > 0 ? dayActivities : (matchingWearable ? [{ duration_minutes: activeMinutes }] : []),
           conditions: healthContext?.conditions || []
         });
 
@@ -226,13 +261,18 @@ export default function AiChatPage() {
         historyLogs.push({
           date: dateStr,
           healthScore,
-          sleepHours: daySleep ? Number(daySleep.duration_hours || 0) : 0,
-          sleepQuality: daySleep ? Number(daySleep.quality_score || 0) : 0,
+          sleepHours,
+          sleepQuality,
           stressLevel: dayStress ? Number(dayStress.stress_level || 5) : 5,
           waterMl: dayHydration ? Number(dayHydration.water_ml || 0) : 0,
-          activeMinutes: dayActivities.reduce((sum, act) => sum + Number(act.duration_minutes || 0), 0),
+          activeMinutes,
           sugarGrams,
-          nutritionalIndex: healthScore
+          nutritionalIndex: healthScore,
+          weightKg,
+          hrv: matchingWearable?.hrv || 55,
+          restingHeartRate: matchingWearable?.restingHeartRate || 65,
+          averageHeartRate: matchingWearable?.averageHeartRate || 75,
+          activeCalories: matchingWearable?.activeCalories || 0
         });
 
         dateCursor.setDate(dateCursor.getDate() + 1);
@@ -277,6 +317,63 @@ export default function AiChatPage() {
         supplements: (healthContext?.supplements || []).map(s => ({ supplement_name: s.supplement_name, dosage: s.dosage, frequency: s.frequency }))
       };
 
+      // Today wearable metrics
+      const todayWearable = finalWearableData.find(w => w.date === todayStr);
+
+      const todayLog = historyLogs.find(l => l.date === todayStr);
+      const sleepHoursToday = todayLog ? todayLog.sleepHours : (todayWearable ? todayWearable.sleepHours : 7);
+      const sleepQualityToday = todayLog ? todayLog.sleepQuality : (todayWearable ? todayWearable.sleepQuality : 70);
+      const hrvToday = todayWearable ? todayWearable.hrv : 55;
+      const activeMinutesToday = todayLog ? todayLog.activeMinutes : (todayWearable ? todayWearable.activeMinutes : 30);
+      const stressLevelToday = todayLog ? todayLog.stressLevel : 5;
+      const activeCaloriesToday = todayWearable ? todayWearable.activeCalories : 250;
+      const waterMlToday = todayLog ? todayLog.waterMl : 1500;
+      const sugarGramsToday = todayLog ? todayLog.sugarGrams : 20;
+      const healthScoreToday = todayLog ? todayLog.healthScore : 75;
+      const workoutsCountToday = todayWearable ? todayWearable.workouts : 0;
+      const weightKgToday = todayWearable?.weightKg || profile?.weight_kg || 75;
+      const heightCmToday = profile?.height_cm || 175;
+      const mealsCaloriesToday = todayTotals ? Math.round(todayTotals.calories || todayTotals.kcal || 0) : 0;
+
+      const recoveryContext = calculateRecoveryMetrics({
+        sleepHours: sleepHoursToday,
+        sleepQuality: sleepQualityToday,
+        hrv: hrvToday,
+        activeMinutes: activeMinutesToday,
+        stressLevel: stressLevelToday
+      });
+
+      const activityContext = analyzeActivity({
+        activeMinutes: activeMinutesToday,
+        activeCalories: activeCaloriesToday,
+        sleepHours: sleepHoursToday,
+        waterMl: waterMlToday,
+        sugarGrams: sugarGramsToday,
+        healthScore: healthScoreToday,
+        workoutsCount: workoutsCountToday
+      });
+
+      const heartContext = analyzeHeartMetrics({
+        restingHeartRate: todayWearable ? todayWearable.restingHeartRate : 65,
+        averageHeartRate: todayWearable ? todayWearable.averageHeartRate : 75,
+        hrv: hrvToday,
+        stressLevel: stressLevelToday
+      });
+
+      const weightContext = analyzeWeightMetrics({
+        weightKg: weightKgToday,
+        heightCm: heightCmToday,
+        mealsCalories: mealsCaloriesToday,
+        activeCalories: activeCaloriesToday,
+        sleepHours: sleepHoursToday,
+        targetWeight: profile?.target_weight || null
+      });
+
+      const wearableContext = {
+        connectedProviders,
+        todayMetrics: todayWearable || null
+      };
+
       setContextData({
         diet: profile?.diet_type || 'standard',
         healthContext: cleanedHealthContext,
@@ -300,7 +397,14 @@ export default function AiChatPage() {
         digitalTwinContext: digitalTwin,
         predictiveContext: predictiveTrends,
         forecastContext: biomarkersForecast,
-        simulationContext: defaultSimulation
+        simulationContext: defaultSimulation,
+        
+        // Phase 8 Wearable Contexts
+        wearableContext,
+        recoveryContext,
+        activityContext,
+        heartContext,
+        weightContext
       });
     }
 
