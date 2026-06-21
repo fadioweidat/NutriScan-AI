@@ -8,6 +8,7 @@ export default defineConfig([
   globalIgnores([
     'dist', 
     'scripts', 
+    'scratch',
     'src/pages', 
     'src/components', 
     'src/contexts', 

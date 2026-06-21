@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /profile
+Disallow: /add-meal
+Disallow: /diary
+Disallow: /meal-planner
+Disallow: /ai-analysis
+Disallow: /health-profile
+Disallow: /blood-tests
+
+Sitemap: https://nutriscan.ai/sitemap.xml

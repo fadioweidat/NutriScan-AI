@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, X, Loader2, CheckCircle } from 'lucide-react';
+import { Search, X, Loader2, CheckCircle, Sparkles, AlertTriangle } from 'lucide-react';
 import { searchFoods } from '../lib/search-engine.js';
 
 /**
@@ -17,6 +17,7 @@ export default function FoodSearch({
   const [results, setResults] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
   const inputRef = useRef(null);
@@ -28,6 +29,7 @@ export default function FoodSearch({
     if (!query.trim()) {
       setResults([]);
       setIsOpen(false);
+      setAiLoading(false);
       return;
     }
 
@@ -121,8 +123,29 @@ export default function FoodSearch({
     setQuery('');
     setResults([]);
     setIsOpen(false);
+    setAiLoading(false);
     setActiveIndex(-1);
     inputRef.current?.focus();
+  };
+
+  const handleAiEstimate = async () => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery || aiLoading) return;
+
+    setAiLoading(true);
+    setLoading(true);
+    try {
+      const aiResults = await searchFoods(trimmedQuery, 1, { includeAiFallback: true });
+      setResults(aiResults || []);
+      setIsOpen(true);
+      setActiveIndex(-1);
+    } catch (err) {
+      console.error("Food AI fallback error:", err);
+      setResults([]);
+    } finally {
+      setAiLoading(false);
+      setLoading(false);
+    }
   };
 
   return (
@@ -177,10 +200,21 @@ export default function FoodSearch({
             role="listbox"
           >
             {results.length === 0 && !loading ? (
-              <li className="px-6 py-8 text-center flex flex-col items-center gap-2 text-white/50">
-                <Search className="w-8 h-8 opacity-20 mb-2" />
-                <span className="font-medium text-white/80">Alimento non trovato</span>
-                <span className="text-sm">Prova a cercare con un altro nome o marca.</span>
+              <li className="px-6 py-7 text-center flex flex-col items-center gap-3 text-white/60">
+                <AlertTriangle className="w-8 h-8 text-amber-400/70 mb-1" />
+                <div>
+                  <span className="block font-semibold text-white/85">Nessun alimento trovato nel database.</span>
+                  <span className="block text-sm mt-1">Vuoi usare la stima AI?</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAiEstimate}
+                  disabled={aiLoading}
+                  className="mt-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-white/10 disabled:text-white/30 text-black font-bold rounded-xl transition-all"
+                >
+                  {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  {aiLoading ? 'Analisi AI...' : 'Analizza con AI'}
+                </button>
               </li>
             ) : (
               results.map((food, i) => (
@@ -206,11 +240,16 @@ export default function FoodSearch({
                       {food.verified && (
                         <CheckCircle className="w-4 h-4 text-lime-400 shrink-0" title="Verificato" />
                       )}
+                      {food.ai_estimate && (
+                        <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/20 font-bold uppercase tracking-wide">
+                          Stima AI
+                        </span>
+                      )}
                     </div>
                     
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/60 font-medium tracking-wide uppercase">
-                        {food.source || 'SYSTEM'}
+                        {food.ai_estimate ? 'Non certificato' : (food.source || 'SYSTEM')}
                       </span>
                       
                       {food.brand && (

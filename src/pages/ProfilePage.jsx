@@ -7,6 +7,7 @@ import {
 import BillingSettings from '../components/BillingSettings.jsx';
 import AdminConsoleCard from '../components/AdminConsoleCard.jsx';
 import ProductionAdminDashboard from '../components/ProductionAdminDashboard.jsx';
+import BetaSupportSection from '../components/BetaSupportSection.jsx';
 
 const GOALS = [
   { value: 'lose_weight', label: 'Perdere peso' },
@@ -372,6 +373,12 @@ export default function ProfilePage() {
       <div className="pt-6 border-t border-white/5 space-y-3">
         <h3 className="text-white font-bold text-base ml-1">Fatturazione & Piani SaaS</h3>
         <BillingSettings />
+      </div>
+
+      {/* Beta Program & Customer Support (Phase 12) */}
+      <div className="pt-6 border-t border-white/5 space-y-3">
+        <h3 className="text-white font-bold text-base ml-1">Programma Beta & Supporto Clienti</h3>
+        <BetaSupportSection />
       </div>
 
       {/* Admin Telemetry Panel (Phase 10) */}

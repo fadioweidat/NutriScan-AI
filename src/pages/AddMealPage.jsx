@@ -59,7 +59,7 @@ export default function AddMealPage() {
     fetchFoods();
   }, []);
 
-  const handleAnalyzeText = (textToAnalyze = textInput) => {
+  const handleAnalyzeText = async (textToAnalyze = textInput) => {
     if (!textToAnalyze.trim()) {
       setError("Inserisci cosa hai mangiato.");
       return;
@@ -75,31 +75,39 @@ export default function AddMealPage() {
       return;
     }
 
-    // 2. Matching con il DB (senza confidence per il testo)
-    const processed = rawParsed.map(item => {
-      const keyword = item.food.toLowerCase().trim();
-      const match = dbFoods.find(f => f.name.toLowerCase() === keyword) 
-                 || dbFoods.find(f => f.name.toLowerCase().includes(keyword));
+    try {
+      // 2. Matching con il DB (senza confidence per il testo)
+      const processed = await Promise.all(rawParsed.map(async (item) => {
+        const keyword = item.food.toLowerCase().trim();
+        const searchResults = await searchFoods(keyword, 1);
+        const match = searchResults[0] 
+                   || dbFoods.find(f => f.name.toLowerCase() === keyword) 
+                   || dbFoods.find(f => f.name.toLowerCase().includes(keyword));
 
-      if (match) {
-        return {
-          ...item,
-          matchedFood: match,
-          isMatched: true,
-          nutrients: engine.calculateMealNutrients(match, item.quantityGrams)
-        };
-      } else {
+        if (match) {
+          return {
+            ...item,
+            matchedFood: match,
+            isMatched: true,
+            nutrients: engine.calculateMealNutrients(match, item.quantityGrams)
+          };
+        }
+
         return {
           ...item,
           matchedFood: null,
           isMatched: false,
           nutrients: null
         };
-      }
-    });
+      }));
 
-    setParsedItems(processed);
-    setAnalyzing(false);
+      setParsedItems(processed);
+    } catch (err) {
+      console.error("Errore ricerca alimenti:", err);
+      setError("Ricerca alimenti non riuscita. Riprova tra poco.");
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const handleVoiceTranscription = (text) => {
@@ -127,9 +135,11 @@ export default function AddMealPage() {
       }
 
       // Match locale con confidence
-      const processed = aiResults.map(item => {
+      const processed = await Promise.all(aiResults.map(async (item) => {
         const keyword = item.food.toLowerCase().trim();
-        const match = dbFoods.find(f => f.name.toLowerCase() === keyword) 
+        const searchResults = await searchFoods(keyword, 1);
+        const match = searchResults[0] 
+                   || dbFoods.find(f => f.name.toLowerCase() === keyword) 
                    || dbFoods.find(f => f.name.toLowerCase().includes(keyword));
 
         return {
@@ -140,7 +150,7 @@ export default function AddMealPage() {
           isMatched: !!match,
           nutrients: match ? engine.calculateMealNutrients(match, item.estimated_grams || 100) : null
         };
-      });
+      }));
 
       setParsedItems(processed);
     } catch (err) {
