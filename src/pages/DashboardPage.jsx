@@ -43,6 +43,9 @@ import ActivityInsights from '../components/ActivityInsights';
 import HeartSummary from '../components/HeartSummary';
 import WeightTrendCard from '../components/WeightTrendCard';
 
+// Phase 9 UI Component Imports
+import SystemStatusCard from '../components/SystemStatusCard';
+
 import { Plus, FileBarChart, Sparkles, BrainCircuit, Activity, Salad, Loader2, AlertTriangle } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -598,6 +601,11 @@ export default function DashboardPage() {
       {/* 5. Mini Trend (7 Giorni) - Full Width */}
       <div className="mt-6">
         <MiniTrendCard weeklyMeals={weeklyMeals} rda={rda} dietConfig={dietConfig} profile={safeProfile} />
+      </div>
+
+      {/* Phase 9: System Status Dashboard */}
+      <div className="mt-8 border-t border-white/[0.04] pt-8">
+        <SystemStatusCard />
       </div>
       
     </div>

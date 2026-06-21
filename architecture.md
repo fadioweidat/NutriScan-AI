@@ -113,3 +113,30 @@ sequenceDiagram
    * Concurrency is optimized using `Promise.all` in **[DashboardPage.jsx](file:///d:/NutriScan%20AI/src/pages/DashboardPage.jsx)** and **[health-coach-engine.js](file:///d:/NutriScan%20AI/src/lib/engines/health-coach-engine.js)**. Profiling, blood reports, conditions, sleep logs, and meal entries are queried in parallel, reducing fetch overhead.
 3. **Caching**:
    * Critical variables and totals are cached inside React's `useMemo` hooks, preventing unnecessary recalculation of daily RDAs, compliance percentages, and goals during component state changes.
+
+---
+
+## 5. Enterprise Governance & Observability (Phase 9)
+
+To ensure enterprise-grade stability, security compliance, and comprehensive logging without exposing sensitive health data, the platform implements a modular governance layer.
+
+### 5.1. Sanitized Logging Framework
+- **[log-sanitizer.js](file:///d:/NutriScan%20AI/src/lib/logger/log-sanitizer.js)**: Scrubbing engine that recursively sanitizes objects, stripping clinical keys (e.g. `biomarkers`, `meals`), JWTs, and PII. It hashes `userId` values using a custom SHA-256 implementation.
+- **[client-logger.js](file:///d:/NutriScan%20AI/src/lib/logger/client-logger.js)**: Queues non-sensitive operational records (UI, rendering, performance, warnings) in a memory buffer.
+- **[server-logger.ts](file:///d:/NutriScan%20AI/supabase/functions/_shared/server-logger.ts)**: Implements correlation-tracked logging for Deno runtime serverless executions.
+
+### 5.2. Rate Limiting Layer
+- **[rate-limit-manager.js](file:///d:/NutriScan%20AI/src/lib/operations/rate-limit-manager.js)**: Controls client-side interaction frequency via immediate double-click block locks and endpoint cooldown limits.
+- **[rate-limit.ts](file:///d:/NutriScan%20AI/supabase/functions/_shared/rate-limit.ts)**: Implements serverless sliding window rate-limiting for AI chat requests and OCR uploads.
+
+### 5.3. Reliability & Error Management
+- **[error-monitor-client.js](file:///d:/NutriScan%20AI/src/lib/logger/error-monitor-client.js)**: Intercepts browser unhandled exceptions, filters out serverless function logs, and initiates exponential backoff retry cycles with jitter for connection-related requests.
+- **[error-monitor-server.ts](file:///d:/NutriScan%20AI/supabase/functions/_shared/error-monitor-server.ts)**: Captures unhandled backend exceptions in Edge Functions.
+- **[audit-engine.ts](file:///d:/NutriScan%20AI/supabase/functions/_shared/audit-engine.ts)**: Compiles administrative transaction trails on the server side.
+
+### 5.4. Diagnostics & Validation
+- **[system-health-engine.js](file:///d:/NutriScan%20AI/src/lib/operations/system-health-engine.js)**: Computes live component latency checks for UI rendering widgets.
+- **[backup-validator.js](file:///d:/NutriScan%20AI/src/lib/operations/backup-validator.js)**: Simulates mock database restorations in-memory and audits snapshot retention policies.
+- **[security-validator.js](file:///d:/NutriScan%20AI/src/lib/operations/security-validator.js)**: Checks CSP headers, SSL, and cookies compliance.
+- **[SystemStatusCard.jsx](file:///d:/NutriScan%20AI/src/components/SystemStatusCard.jsx)**: Admin status widget embedded at the bottom of the dashboard.
+
