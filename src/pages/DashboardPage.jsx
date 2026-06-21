@@ -17,6 +17,18 @@ import { getHealthCoachContext } from '../lib/engines/health-coach-engine';
 import AiHealthSummary from '../components/dashboard/AiHealthSummary';
 import WeeklyMealPlanCard from '../components/dashboard/WeeklyMealPlanCard';
 
+// Phase 6 Engine Imports
+import { buildDigitalTwinContext } from '../lib/engines/digital-twin-engine';
+import { computePredictiveTrends } from '../lib/engines/predictive-health-engine';
+import { predictDeficiencies } from '../lib/engines/deficiency-prediction-engine';
+import { forecastBiomarkers } from '../lib/engines/forecast-engine';
+import { generateEarlyWarnings } from '../lib/engines/early-warning-engine';
+import dailyScoreEngine from '../lib/engines/daily-score-engine';
+
+// Phase 6 UI Component Imports
+import AiHealthTwinCard from '../components/AiHealthTwinCard';
+import HealthTimeline from '../components/HealthTimeline';
+
 import { Plus, FileBarChart, Sparkles, BrainCircuit, Activity, Salad, Loader2, AlertTriangle } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -41,6 +53,13 @@ export default function DashboardPage() {
   const [drugWarnings, setDrugWarnings] = useState([]);
   const [coachContext, setCoachContext] = useState(null);
 
+  // Phase 6 Health Twin States
+  const [digitalTwin, setDigitalTwin] = useState(null);
+  const [predictiveTrends, setPredictiveTrends] = useState(null);
+  const [deficiencies, setDeficiencies] = useState([]);
+  const [warnings, setWarnings] = useState([]);
+  const [historyLogs, setHistoryLogs] = useState([]);
+
   useEffect(() => {
     if (!user) return;
     loadDashboardData();
@@ -50,19 +69,26 @@ export default function DashboardPage() {
     try {
       setLoading(true);
 
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const cutoffStr = sevenDaysAgo.toISOString().split('T')[0];
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const cutoff90Str = ninetyDaysAgo.toISOString().split('T')[0];
       const todayStr = new Date().toISOString().split('T')[0];
 
-      // Parallelize all baseline dashboard queries
+      // Parallel fetch of all health records over 90 days
       const [
         countRes,
         lsRes,
         medsRes,
+        suppsRes,
+        conditionsRes,
         coachRes,
         foodsRes,
-        mealsRes
+        mealsRes,
+        sleepLogsRes,
+        stressLogsRes,
+        hydrationLogsRes,
+        activityLogsRes,
+        reportsRes
       ] = await Promise.all([
         supabase
           .from('meal_entries')
@@ -70,6 +96,8 @@ export default function DashboardPage() {
           .eq('user_id', user.id),
         lifestyleEngine.getTodayLifestyleContext(user.id).catch(e => { console.error(e); return null; }),
         healthEngine.getMedications(user.id).catch(e => { console.error(e); return []; }),
+        healthEngine.getSupplements(user.id).catch(e => { console.error(e); return []; }),
+        healthEngine.getConditions(user.id).catch(e => { console.error(e); return []; }),
         getHealthCoachContext(supabase, user.id).catch(e => { console.error(e); return null; }),
         supabase
           .from('foods')
@@ -89,7 +117,12 @@ export default function DashboardPage() {
             )
           `)
           .eq('user_id', user.id)
-          .gte('entry_date', cutoffStr)
+          .gte('entry_date', cutoff90Str),
+        supabase.from('sleep_logs').select('*').eq('user_id', user.id).gte('entry_date', cutoff90Str),
+        supabase.from('stress_logs').select('*').eq('user_id', user.id).gte('entry_date', cutoff90Str),
+        supabase.from('hydration_logs').select('*').eq('user_id', user.id).gte('entry_date', cutoff90Str),
+        supabase.from('activity_logs').select('*').eq('user_id', user.id).gte('entry_date', cutoff90Str),
+        supabase.from('blood_test_reports').select('*').eq('user_id', user.id).order('test_date', { ascending: false })
       ]);
 
       const count = countRes.count || 0;
@@ -103,20 +136,166 @@ export default function DashboardPage() {
       setLifestyleContext(lsRes);
 
       const activeMeds = (medsRes || []).filter(m => m.is_active);
-      const warnings = medicalKnowledgeEngine.checkMedicationInteractions(activeMeds);
-      setDrugWarnings(warnings);
+      const warningsList = medicalKnowledgeEngine.checkMedicationInteractions(activeMeds);
+      setDrugWarnings(warningsList);
 
       setCoachContext(coachRes);
       setFoods(foodsRes.data || []);
 
+      const sleepLogs = sleepLogsRes.data || [];
+      const stressLogs = stressLogsRes.data || [];
+      const hydrationLogs = hydrationLogsRes.data || [];
+      const activityLogs = activityLogsRes.data || [];
+      const reports = reportsRes.data || [];
+      const conditions = conditionsRes || [];
+      const supplements = suppsRes || [];
+      const medications = medsRes || [];
+
+      // Fetch historical biomarkers for all reports
+      let historicalBiomarkers = [];
+      const reportIds = reports.map(r => r.id);
+      if (reportIds.length > 0) {
+        const { data: bRes } = await supabase
+          .from('blood_test_biomarkers')
+          .select('*')
+          .in('report_id', reportIds);
+        historicalBiomarkers = bRes || [];
+      }
+
+      // Group meals by date to calculate daily totals
+      const mealsByDate = {};
       const processedMeals = (mealsRes.data || []).map(m => {
         if (!m.foods) return null;
         const calc = engine.calculateMealNutrients(m.foods, m.quantity_grams);
-        return { ...calc, entry_date: m.entry_date };
+        const mealObj = { ...calc, entry_date: m.entry_date };
+        
+        const date = m.entry_date;
+        if (!mealsByDate[date]) mealsByDate[date] = [];
+        mealsByDate[date].push({
+          quantity_grams: m.quantity_grams,
+          ...m.foods
+        });
+
+        return mealObj;
       }).filter(Boolean);
 
-      setWeeklyMeals(processedMeals);
+      // Save processed meals for other layout charts (7 days cutoff for standard widgets)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const cutoffStr = sevenDaysAgo.toISOString().split('T')[0];
+
+      setWeeklyMeals(processedMeals.filter(m => m.entry_date >= cutoffStr));
       setTodayMeals(processedMeals.filter(m => m.entry_date === todayStr));
+
+      // Calculate longitudinal history logs
+      const calculatedLogs = [];
+      const dateCursor = new Date(ninetyDaysAgo);
+      const todayObj = new Date();
+      const dietType = safeProfile.diet_type || 'standard';
+
+      while (dateCursor <= todayObj) {
+        const dateStr = dateCursor.toISOString().split('T')[0];
+        const dayMeals = mealsByDate[dateStr] || [];
+        const dayTotals = dayMeals.length > 0 ? engine.calculateDailyTotals(dayMeals) : null;
+        
+        const daySleep = sleepLogs.find(l => l.entry_date === dateStr);
+        const dayStress = stressLogs.find(l => l.entry_date === dateStr);
+        const dayHydration = hydrationLogs.find(l => l.entry_date === dateStr);
+        const dayActivities = activityLogs.filter(l => l.entry_date === dateStr);
+
+        const healthScore = dailyScoreEngine.calculateDailyHealthScore({
+          totals: dayTotals,
+          dietType,
+          meals: dayMeals,
+          sleepLog: daySleep,
+          stressLog: dayStress,
+          hydrationLog: dayHydration,
+          activityLogs: dayActivities,
+          conditions: conditions
+        });
+
+        const sugarGrams = dayTotals ? (dayTotals.sugar || dayTotals.sugar_g || 0) : 0;
+
+        calculatedLogs.push({
+          date: dateStr,
+          healthScore,
+          sleepHours: daySleep ? Number(daySleep.duration_hours || 0) : 0,
+          sleepQuality: daySleep ? Number(daySleep.quality_score || 0) : 0,
+          stressLevel: dayStress ? Number(dayStress.stress_level || 5) : 5,
+          waterMl: dayHydration ? Number(dayHydration.water_ml || 0) : 0,
+          activeMinutes: dayActivities.reduce((sum, act) => sum + Number(act.duration_minutes || 0), 0),
+          sugarGrams,
+          nutritionalIndex: healthScore
+        });
+
+        dateCursor.setDate(dateCursor.getDate() + 1);
+      }
+      setHistoryLogs(calculatedLogs);
+
+      // Calculate averages of nutrients over the last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+      let totalIron = 0, totalCalcium = 0, totalMagnesium = 0, totalOmega3 = 0, daysWithMeals = 0;
+      Object.entries(mealsByDate).forEach(([dateStr, dayMeals]) => {
+        if (dateStr >= thirtyDaysAgoStr && dayMeals.length > 0) {
+          const totals = engine.calculateDailyTotals(dayMeals);
+          if (totals) {
+            daysWithMeals++;
+            totalIron += totals.micronutrients?.iron || totals.iron || 0;
+            totalCalcium += totals.micronutrients?.calcium || totals.calcio || 0;
+            totalMagnesium += totals.micronutrients?.magnesium || totals.magnesio || 0;
+            totalOmega3 += totals.omega3 || 0;
+          }
+        }
+      });
+
+      const recentNutrients = {
+        iron: daysWithMeals > 0 ? totalIron / daysWithMeals : 12,
+        calcium: daysWithMeals > 0 ? totalCalcium / daysWithMeals : 600,
+        magnesium: daysWithMeals > 0 ? totalMagnesium / daysWithMeals : 250,
+        omega3: daysWithMeals > 0 ? totalOmega3 / daysWithMeals : 0.1
+      };
+
+      // Construct Twin Context
+      const digitalTwinCtx = buildDigitalTwinContext({
+        profile: safeProfile,
+        conditions,
+        allergies: [],
+        medications,
+        supplements,
+        reports,
+        biomarkers: historicalBiomarkers.filter(b => b.report_id === (reports[0]?.id)),
+        sleepLogs,
+        stressLogs,
+        hydrationLogs,
+        activityLogs,
+        mealsHistory: processedMeals
+      });
+      setDigitalTwin(digitalTwinCtx);
+
+      // Run predictive trends and alerts
+      const predictive = computePredictiveTrends({ historyLogs: calculatedLogs });
+      setPredictiveTrends(predictive);
+
+      const defs = predictDeficiencies({
+        profile: safeProfile,
+        conditions,
+        medications,
+        supplements,
+        biomarkers: digitalTwinCtx.biomarkers,
+        recentNutrients
+      });
+      setDeficiencies(defs);
+
+      const fore = forecastBiomarkers({ reports, historicalBiomarkers });
+      const warns = generateEarlyWarnings({
+        predictiveTrends: predictive,
+        deficiencies: defs,
+        biomarkersForecast: fore
+      });
+      setWarnings(warns);
 
     } catch (err) {
       console.error("Errore caricamento dashboard:", err);
@@ -217,8 +396,24 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Phase 6: AI Health Twin Premium Widget */}
+      {digitalTwin && (
+        <AiHealthTwinCard 
+          digitalTwin={digitalTwin}
+          predictiveTrends={predictiveTrends}
+          deficiencies={deficiencies}
+          warnings={warnings}
+          currentScore={digitalTwin.healthScore || coachContext?.healthScore || dailyTotals?.healthScore || 70}
+        />
+      )}
+
       {/* AI Health Summary Widget */}
       {coachContext && <AiHealthSummary context={coachContext} />}
+
+      {/* Phase 6: Longitudinal Health Timeline Charts */}
+      {historyLogs.length > 0 && (
+        <HealthTimeline historyLogs={historyLogs} />
+      )}
 
       {/* Weekly Meal Plan Preview */}
       <WeeklyMealPlanCard />

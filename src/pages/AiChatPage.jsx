@@ -7,6 +7,11 @@ import lifestyleEngine from '../lib/lifestyle-engine';
 import medicalKnowledgeEngine from '../lib/engines/medical-knowledge-engine';
 import scientificNutritionEngine from '../lib/engines/scientific-nutrition-engine';
 import { getHealthCoachContext } from '../lib/engines/health-coach-engine';
+import { buildDigitalTwinContext } from '../lib/engines/digital-twin-engine';
+import { computePredictiveTrends } from '../lib/engines/predictive-health-engine';
+import { forecastBiomarkers } from '../lib/engines/forecast-engine';
+import { runSimulation } from '../lib/engines/simulation-engine';
+import dailyScoreEngine from '../lib/engines/daily-score-engine';
 import { Send, Bot, User, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
 
 const QUICK_PROMPTS = [
@@ -38,10 +43,11 @@ export default function AiChatPage() {
 
   useEffect(() => {
     async function prepareContext() {
-      // Fetch 7 days of meals
+      // Fetch 90 days of history for digital twin and longitudinal trends
       const today = new Date();
-      const sevenDaysAgo = new Date(today);
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const ninetyDaysAgo = new Date(today);
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const cutoff90Str = ninetyDaysAgo.toISOString().split('T')[0];
 
       // Helper to fetch meal planner data concurrently
       const fetchMealPlannerContext = async (userId) => {
@@ -82,7 +88,6 @@ export default function AiChatPage() {
           return {
             diet_type: activePlan.diet_type,
             calories_target: activePlan.calories_target,
-            // Optimized: only send food names and macro aggregates to keep AI payload small
             days: days.map(d => ({
               day: d.day_of_week,
               breakfast: d.breakfast?.name || '',
@@ -97,13 +102,18 @@ export default function AiChatPage() {
         return null;
       };
 
-      // Parallelize baseline context fetches
+      // Parallelize baseline context fetches over 90 days
       const [
         mealsRes,
         healthContext,
         lifestyleContext,
         healthCoachContext,
-        mealPlannerContext
+        mealPlannerContext,
+        sleepLogsRes,
+        stressLogsRes,
+        hydrationLogsRes,
+        activityLogsRes,
+        reportsRes
       ] = await Promise.all([
         supabase
           .from('meal_entries')
@@ -111,26 +121,62 @@ export default function AiChatPage() {
             *,
             foods (*, food_nutrients (*))
           `)
-          .gte('entry_date', sevenDaysAgo.toISOString().split('T')[0]),
+          .gte('entry_date', cutoff90Str),
         healthEngine.getFullHealthContext(user.id).catch(e => { console.error(e); return null; }),
         lifestyleEngine.getTodayLifestyleContext(user.id).catch(e => { console.error(e); return null; }),
         getHealthCoachContext(supabase, user.id).catch(e => { console.error(e); return null; }),
-        fetchMealPlannerContext(user.id).catch(e => { console.error(e); return null; })
+        fetchMealPlannerContext(user.id).catch(e => { console.error(e); return null; }),
+        supabase.from('sleep_logs').select('*').eq('user_id', user.id).gte('entry_date', cutoff90Str),
+        supabase.from('stress_logs').select('*').eq('user_id', user.id).gte('entry_date', cutoff90Str),
+        supabase.from('hydration_logs').select('*').eq('user_id', user.id).gte('entry_date', cutoff90Str),
+        supabase.from('activity_logs').select('*').eq('user_id', user.id).gte('entry_date', cutoff90Str),
+        supabase.from('blood_test_reports').select('*').eq('user_id', user.id).order('test_date', { ascending: false })
       ]);
 
-      const meals = mealsRes.data;
-      if (!meals || meals.length === 0) {
+      const meals = mealsRes.data || [];
+      if (meals.length === 0) {
         setHasMeals(false);
         return;
       }
 
       setHasMeals(true);
 
-      // Extract today's meals
+      const sleepLogs = sleepLogsRes.data || [];
+      const stressLogs = stressLogsRes.data || [];
+      const hydrationLogs = hydrationLogsRes.data || [];
+      const activityLogs = activityLogsRes.data || [];
+      const reports = reportsRes.data || [];
+
+      // Fetch historical biomarkers
+      let historicalBiomarkers = [];
+      const reportIds = reports.map(r => r.id);
+      if (reportIds.length > 0) {
+        const { data: bRes } = await supabase
+          .from('blood_test_biomarkers')
+          .select('*')
+          .in('report_id', reportIds);
+        historicalBiomarkers = bRes || [];
+      }
+
+      // Group meals by date
+      const mealsByDate = {};
+      meals.forEach(entry => {
+        const date = entry.entry_date;
+        if (!mealsByDate[date]) mealsByDate[date] = [];
+        if (entry.foods) {
+          mealsByDate[date].push({
+            quantity_grams: entry.quantity_grams,
+            ...entry.foods
+          });
+        }
+      });
+
+      const dietType = profile?.diet_type || 'standard';
+
+      // Reconstruct meals with nutrients for today
       const todayStr = today.toISOString().split('T')[0];
       const todayMeals = meals.filter(m => m.entry_date === todayStr);
 
-      // Reconstruct meals with nutrients for engine
       const reconstructMeals = (mealEntries) => {
          return mealEntries.map(m => {
              const food = m.foods;
@@ -146,11 +192,74 @@ export default function AiChatPage() {
       const scientificContext = scientificNutritionEngine.generateScientificContext(healthContext, lifestyleContext);
       
       const rda = engine.getRDA(profile, healthContext);
-      const score = engine.calculateNutritionScore(todayTotals, profile); // fixed bug: passing profile instead of rda
+      const score = engine.calculateNutritionScore(todayTotals, profile);
       const comparison = engine.compareWithRDA(todayTotals, profile);
 
+      // Build history logs for predictive engine
+      const historyLogs = [];
+      const dateCursor = new Date(ninetyDaysAgo);
+      const todayObj = new Date();
+
+      while (dateCursor <= todayObj) {
+        const dateStr = dateCursor.toISOString().split('T')[0];
+        const dayMeals = mealsByDate[dateStr] || [];
+        const dayTotals = dayMeals.length > 0 ? engine.calculateDailyTotals(dayMeals) : null;
+        
+        const daySleep = sleepLogs.find(l => l.entry_date === dateStr);
+        const dayStress = stressLogs.find(l => l.entry_date === dateStr);
+        const dayHydration = hydrationLogs.find(l => l.entry_date === dateStr);
+        const dayActivities = activityLogs.filter(l => l.entry_date === dateStr);
+
+        const healthScore = dailyScoreEngine.calculateDailyHealthScore({
+          totals: dayTotals,
+          dietType,
+          meals: dayMeals,
+          sleepLog: daySleep,
+          stressLog: dayStress,
+          hydrationLog: dayHydration,
+          activityLogs: dayActivities,
+          conditions: healthContext?.conditions || []
+        });
+
+        const sugarGrams = dayTotals ? (dayTotals.sugar || dayTotals.sugar_g || 0) : 0;
+
+        historyLogs.push({
+          date: dateStr,
+          healthScore,
+          sleepHours: daySleep ? Number(daySleep.duration_hours || 0) : 0,
+          sleepQuality: daySleep ? Number(daySleep.quality_score || 0) : 0,
+          stressLevel: dayStress ? Number(dayStress.stress_level || 5) : 5,
+          waterMl: dayHydration ? Number(dayHydration.water_ml || 0) : 0,
+          activeMinutes: dayActivities.reduce((sum, act) => sum + Number(act.duration_minutes || 0), 0),
+          sugarGrams,
+          nutritionalIndex: healthScore
+        });
+
+        dateCursor.setDate(dateCursor.getDate() + 1);
+      }
+
+      // Compute Phase 6 twin contexts
+      const digitalTwin = buildDigitalTwinContext({
+        profile,
+        conditions: healthContext?.conditions,
+        allergies: healthContext?.allergies,
+        medications: healthContext?.medications,
+        supplements: healthContext?.supplements,
+        reports,
+        biomarkers: historicalBiomarkers.filter(b => b.report_id === (reports[0]?.id)),
+        sleepLogs,
+        stressLogs,
+        hydrationLogs,
+        activityLogs,
+        mealsHistory: meals
+      });
+
+      const predictiveTrends = computePredictiveTrends({ historyLogs });
+      const biomarkersForecast = forecastBiomarkers({ reports, historicalBiomarkers });
+      const defaultSimulation = runSimulation(score, { sleepDeltaHours: 1, waterDeltaMl: 500 });
+
       // Calculate priorities over 7 days
-      const allReconstructed = reconstructMeals(meals);
+      const allReconstructed = reconstructMeals(meals.filter(m => m.entry_date >= todayStr)); // recent
       const daysMap = {};
       allReconstructed.forEach(m => {
         if (!daysMap[m.entry_date]) daysMap[m.entry_date] = [];
@@ -160,7 +269,6 @@ export default function AiChatPage() {
       const avgTotals = engine.calculateAverageTotals(daysTotals);
       const priorities = engine.getTopNutritionalPriorities(avgTotals, rda, 3, profile);
 
-      // Clean healthContext payload to avoid sending DB metadata, timestamps, and keys to the AI
       const cleanedHealthContext = {
         conditions: (healthContext?.conditions || []).map(c => ({ condition_name: c.condition_name, diagnosed_date: c.diagnosed_date })),
         allergies: (healthContext?.allergies || []).map(a => ({ allergy_name: a.allergy_name, severity: a.severity })),
@@ -188,7 +296,11 @@ export default function AiChatPage() {
         okNutrients: comparison.ok,
         improveNutrients: comparison.low,
         missingNutrients: comparison.missing,
-        sevenDayPriorities: priorities
+        sevenDayPriorities: priorities,
+        digitalTwinContext: digitalTwin,
+        predictiveContext: predictiveTrends,
+        forecastContext: biomarkersForecast,
+        simulationContext: defaultSimulation
       });
     }
 
